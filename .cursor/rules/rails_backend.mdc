@@ -1,0 +1,244 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Rails Backend Standards & Best Practices
+
+## 🚀 General Principles
+- **Follow Rails conventions** over configuration
+- **API-only architecture** - keep it minimal and focused
+- **Write readable, maintainable code** over clever solutions
+- **Use meaningful names** for variables, methods, and classes
+- **Keep methods small** (under 10 lines when possible)
+- **Single Responsibility Principle** - one class/method does one thing well
+- **Minimal dependencies** - only include what you actually need
+
+## 📁 File Structure & Organization
+
+### Controllers
+- Keep controllers **thin** - business logic belongs in services/models
+- Use **before_actions** for common functionality
+- Return **consistent JSON responses** with proper HTTP status codes
+- Handle **errors gracefully** with rescue blocks
+
+```ruby
+# Good
+class Api::V1::UsersController < ApplicationController
+  before_action :authenticate_user!
+  before_action :set_user, only: [:show, :update, :destroy]
+
+  def index
+    users = UserService.paginated_users(params)
+    render json: users, status: :ok
+  rescue StandardError => e
+    render json: { error: e.message }, status: :internal_server_error
+  end
+
+  private
+
+  def set_user
+    @user = User.find(params[:id])
+  end
+end
+```
+
+### Models
+- Use **ActiveRecord validations** for data integrity
+- Extract complex business logic into **service objects**
+- Use **scopes** for reusable queries
+- Add **database indexes** for frequently queried columns
+
+```ruby
+# Good
+class User < ApplicationRecord
+  validates :email, presence: true, uniqueness: true
+  validates :name, presence: true, length: { minimum: 2 }
+
+  scope :active, -> { where(active: true) }
+  scope :recent, -> { where('created_at > ?', 1.week.ago) }
+
+  def full_name
+    "#{first_name} #{last_name}".strip
+  end
+end
+```
+
+### Services
+- Create **service objects** for complex business logic
+- Use **meaningful class names** ending in 'Service'
+- Return **Result objects** or raise specific exceptions
+- Keep services **focused** on a single responsibility
+
+```ruby
+# Good
+class UserRegistrationService
+  def initialize(user_params)
+    @user_params = user_params
+  end
+
+  def call
+    user = User.new(@user_params)
+    
+    if user.save
+      NotificationService.send_welcome_email(user)
+      { success: true, user: user }
+    else
+      { success: false, errors: user.errors }
+    end
+  end
+end
+```
+
+## 🔒 Security Best Practices
+- **Always use strong parameters** in controllers
+- **Sanitize user input** before database operations
+- **Use HTTPS** in production
+- **Implement proper authentication/authorization**
+- **Validate file uploads** and limit file types
+- **Use environment variables** for sensitive data
+
+```ruby
+# Strong parameters
+def user_params
+  params.require(:user).permit(:name, :email, :password)
+end
+```
+
+## 🗄️ Database Best Practices
+- **Use migrations** for all schema changes
+- **Add indexes** for foreign keys and frequently queried columns
+- **Use constraints** at the database level when possible
+- **Avoid N+1 queries** with includes/joins
+- **Use database transactions** for multi-step operations
+
+```ruby
+# Good - Avoid N+1 queries
+users = User.includes(:posts, :comments).where(active: true)
+
+# Good - Use transactions
+ActiveRecord::Base.transaction do
+  user.update!(user_params)
+  UserAuditLog.create!(user: user, action: 'updated')
+end
+```
+
+## ✅ Testing Standards
+- **Write tests** for all public methods
+- **Use descriptive test names** that explain behavior
+- **Follow AAA pattern** (Arrange, Act, Assert)
+- **Use factories** instead of fixtures
+- **Mock external services** in tests
+
+```ruby
+# Good RSpec example
+RSpec.describe UserRegistrationService do
+  describe '#call' do
+    context 'with valid parameters' do
+      it 'creates a user and sends welcome email' do
+        # Arrange
+        user_params = { name: 'John Doe', email: 'john@example.com' }
+        
+        # Act
+        result = described_class.new(user_params).call
+        
+        # Assert
+        expect(result[:success]).to be true
+        expect(result[:user]).to be_persisted
+      end
+    end
+  end
+end
+```
+
+## 📝 Code Style
+- **Use RuboCop** for consistent code formatting
+- **Follow Ruby style guide** conventions
+- **Use meaningful variable names** (no abbreviations)
+- **Add comments** for complex business logic only
+- **Use early returns** to reduce nesting
+
+```ruby
+# Good
+def process_payment(amount)
+  return { error: 'Invalid amount' } if amount <= 0
+  return { error: 'Insufficient funds' } unless sufficient_funds?(amount)
+  
+  charge_card(amount)
+end
+```
+
+## 🔧 Error Handling
+- **Use specific exception classes** instead of StandardError
+- **Handle errors at the appropriate level**
+- **Log errors** with sufficient context
+- **Return meaningful error messages** to clients
+
+```ruby
+# Good
+class PaymentProcessingError < StandardError; end
+
+def process_payment
+  # ... payment logic
+rescue PaymentGateway::InsufficientFunds => e
+  Rails.logger.error "Payment failed: #{e.message}"
+  { error: 'Insufficient funds', code: 'INSUFFICIENT_FUNDS' }
+end
+```
+
+## 🚦 API Design
+- **Use RESTful routes** when possible
+- **Version your APIs** (e.g., /api/v1/)
+- **Return consistent JSON structure**
+- **Use proper HTTP status codes**
+- **Include pagination** for list endpoints
+
+```ruby
+# Good JSON response structure
+{
+  "data": [...],
+  "meta": {
+    "total": 100,
+    "page": 1,
+    "per_page": 20
+  },
+  "links": {
+    "self": "/api/v1/users?page=1",
+    "next": "/api/v1/users?page=2"
+  }
+}
+```
+
+## 🔄 Background Jobs
+- **Use ActiveJob** for background processing
+- **Keep job classes small** and focused
+- **Handle job failures** gracefully
+- **Use retries** for transient failures
+- **Monitor job queues** in production
+
+```ruby
+# Good
+class SendEmailJob < ApplicationJob
+  queue_as :default
+  retry_on StandardError, wait: 5.seconds, attempts: 3
+
+  def perform(user_id, email_type)
+    user = User.find(user_id)
+    EmailService.send_email(user, email_type)
+  end
+end
+```
+
+## 📊 Performance
+- **Use database indexes** appropriately
+- **Eager load associations** to avoid N+1 queries
+- **Cache expensive operations**
+- **Use background jobs** for heavy processing
+- **Monitor query performance** with tools like Bullet
+
+## 🌍 Environment & Configuration
+- **Use environment variables** for configuration
+- **Never commit secrets** to version control
+- **Use Rails credentials** for sensitive data
+- **Configure different settings** per environment
+- **Use feature flags** for gradual rollouts

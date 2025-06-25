@@ -1,0 +1,38 @@
+version: "2.0"
+
+commands:
+  start:
+    summary: "🚀 Start Vite dev server"
+    command: "docker compose exec web npm run dev -- --host --port 5173"
+    
+  lint:
+    summary: "🔍 Run ESLint"
+    command: "docker compose exec web npm run lint"
+    
+  lint.fix:
+    summary: "🔧 Fix ESLint issues"
+    command: "docker compose exec web npm run lint -- --fix"
+    
+  format:
+    summary: "✨ Format code with Prettier"
+    command: "docker compose exec web npm run format"
+    
+  type-check:
+    summary: "📝 Run TypeScript type checking"
+    command: "docker compose exec web npm run type-check"
+    
+  build:
+    summary: "🏗️ Build for production"
+    command: "docker compose exec web npm run build"
+    
+  preview:
+    summary: "👀 Preview production build"
+    command: "docker compose exec web npm run preview"
+    
+  test:
+    summary: "🧪 Run tests"
+    command: "docker compose exec web npm run test"
+    
+  install:
+    summary: "📦 Install dependencies"
+    command: "docker compose exec web npm install" 

@@ -1,0 +1,58 @@
+version: "2.0"
+
+commands:
+  start:
+    summary: "🚀 Start Rails server"
+    command: "docker compose exec api rails s -p 3001"
+    
+  console:
+    summary: "🔌 Open Rails console"
+    command: "docker compose exec api rails c"
+    
+  test:
+    summary: "🧪 Run RSpec tests"
+    command: "docker compose exec api rspec"
+    
+  test.watch:
+    summary: "👀 Run tests in watch mode"
+    command: "docker compose exec api rspec --format documentation"
+    
+  lint:
+    summary: "🔍 Run RuboCop"
+    command: "docker compose exec api rubocop"
+    
+  lint.fix:
+    summary: "🔧 Auto-fix RuboCop issues"
+    command: "docker compose exec api rubocop -A"
+    
+  db.migrate:
+    summary: "🗄️ Run database migrations"
+    command: "docker compose exec api rails db:migrate"
+    
+  db.rollback:
+    summary: "⏪ Rollback last migration"
+    command: "docker compose exec api rails db:rollback"
+    
+  db.seed:
+    summary: "🌱 Seed database"
+    command: "docker compose exec api rails db:seed"
+    
+  db.setup:
+    summary: "⚙️ Setup database (create, migrate, seed)"
+    command: "docker compose exec api rails db:setup"
+    
+  db.reset:
+    summary: "🔄 Reset database"
+    command: "docker compose exec api rails db:reset"
+    
+  routes:
+    summary: "🗺️ Show all routes"
+    command: "docker compose exec api rails routes"
+    
+  install:
+    summary: "💎 Install gems"
+    command: "docker compose exec api bundle install"
+    
+  generate:
+    summary: "🏗️ Rails generate (usage: dev generate model User name:string)"
+    command: "docker compose exec api rails generate" 

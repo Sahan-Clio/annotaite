@@ -1,0 +1,728 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# React Frontend Standards & Best Practices
+
+## 🚀 General Principles
+- **Functional components** with hooks over class components
+- **TypeScript** for type safety and better developer experience
+- **Component composition** over inheritance
+- **Keep components small** and focused on single responsibility
+- **Write self-documenting code** with meaningful names
+- **Use Yarn** as the default package manager over npm
+
+## 📁 File Structure & Organization
+
+### Component Organization
+```
+src/
+  components/
+    common/           # Reusable UI components
+    features/         # Feature-specific components
+    layout/           # Layout components
+  hooks/              # Custom hooks
+  services/           # API calls and business logic
+  utils/              # Utility functions
+  types/              # TypeScript type definitions
+  constants/          # App constants
+```
+
+### Component Naming
+- **PascalCase** for component names and files
+- **camelCase** for functions and variables
+- **UPPER_SNAKE_CASE** for constants
+- **kebab-case** for CSS classes
+
+```tsx
+// Good
+const UserProfile = () => {
+  const [isLoading, setIsLoading] = useState(false);
+  const API_BASE_URL = 'https://api.example.com';
+  
+  return <div className="user-profile">...</div>;
+};
+```
+
+## 🔧 Component Best Practices
+
+### Functional Components with Hooks
+```tsx
+// Good - Functional component with hooks
+interface UserProfileProps {
+  userId: string;
+  onUpdate?: (user: User) => void;
+}
+
+const UserProfile: React.FC<UserProfileProps> = ({ userId, onUpdate }) => {
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchUser(userId);
+  }, [userId]);
+
+  const fetchUser = async (id: string) => {
+    try {
+      setIsLoading(true);
+      const userData = await userService.getUser(id);
+      setUser(userData);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch user');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (isLoading) return <LoadingSpinner />;
+  if (error) return <ErrorMessage message={error} />;
+  if (!user) return <NotFound />;
+
+  return (
+    <div className="user-profile">
+      <h1>{user.name}</h1>
+      <p>{user.email}</p>
+    </div>
+  );
+};
+```
+
+### Props Interface Definition
+```tsx
+// Good - Well-defined props interface
+interface ButtonProps {
+  variant?: 'primary' | 'secondary' | 'danger';
+  size?: 'small' | 'medium' | 'large';
+  disabled?: boolean;
+  loading?: boolean;
+  onClick?: () => void;
+  children: React.ReactNode;
+  className?: string;
+  'data-testid'?: string;
+}
+
+const Button: React.FC<ButtonProps> = ({
+  variant = 'primary',
+  size = 'medium',
+  disabled = false,
+  loading = false,
+  onClick,
+  children,
+  className,
+  'data-testid': testId,
+}) => {
+  const buttonClass = `btn btn--${variant} btn--${size} ${className || ''}`;
+  
+  return (
+    <button
+      className={buttonClass}
+      disabled={disabled || loading}
+      onClick={onClick}
+      data-testid={testId}
+    >
+      {loading ? <Spinner /> : children}
+    </button>
+  );
+};
+```
+
+## 🪝 Custom Hooks
+
+### Extract Reusable Logic
+```tsx
+// Good - Custom hook for API calls
+const useApi = <T>(url: string, options?: RequestInit) => {
+  const [data, setData] = useState<T | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const response = await fetch(url, options);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        setData(result);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'An error occurred');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [url]);
+
+  return { data, loading, error };
+};
+
+// Usage
+const UserList = () => {
+  const { data: users, loading, error } = useApi<User[]>('/api/users');
+  
+  if (loading) return <LoadingSpinner />;
+  if (error) return <ErrorMessage message={error} />;
+  
+  return (
+    <ul>
+      {users?.map(user => (
+        <li key={user.id}>{user.name}</li>
+      ))}
+    </ul>
+  );
+};
+```
+
+## 📊 State Management
+
+### Local State with useState
+```tsx
+// Good - Simple local state
+const [formData, setFormData] = useState({
+  name: '',
+  email: '',
+  password: ''
+});
+
+const handleInputChange = (field: string, value: string) => {
+  setFormData(prev => ({
+    ...prev,
+    [field]: value
+  }));
+};
+```
+
+### Complex State with useReducer
+```tsx
+// Good - Complex state with useReducer
+interface State {
+  users: User[];
+  loading: boolean;
+  error: string | null;
+  selectedUser: User | null;
+}
+
+type Action =
+  | { type: 'FETCH_START' }
+  | { type: 'FETCH_SUCCESS'; payload: User[] }
+  | { type: 'FETCH_ERROR'; payload: string }
+  | { type: 'SELECT_USER'; payload: User };
+
+const userReducer = (state: State, action: Action): State => {
+  switch (action.type) {
+    case 'FETCH_START':
+      return { ...state, loading: true, error: null };
+    case 'FETCH_SUCCESS':
+      return { ...state, loading: false, users: action.payload };
+    case 'FETCH_ERROR':
+      return { ...state, loading: false, error: action.payload };
+    case 'SELECT_USER':
+      return { ...state, selectedUser: action.payload };
+    default:
+      return state;
+  }
+};
+```
+
+## 🔄 Data Fetching
+
+### Using React Query/TanStack Query
+```tsx
+// Good - Using React Query for data fetching
+const useUsers = () => {
+  return useQuery({
+    queryKey: ['users'],
+    queryFn: async () => {
+      const response = await fetch('/api/users');
+      if (!response.ok) {
+        throw new Error('Failed to fetch users');
+      }
+      return response.json();
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    cacheTime: 10 * 60 * 1000, // 10 minutes
+  });
+};
+
+const UserList = () => {
+  const { data: users, isLoading, error } = useUsers();
+  
+  if (isLoading) return <LoadingSpinner />;
+  if (error) return <ErrorMessage message={error.message} />;
+  
+  return (
+    <div>
+      {users?.map(user => (
+        <UserCard key={user.id} user={user} />
+      ))}
+    </div>
+  );
+};
+```
+
+## 🎨 Styling Best Practices
+
+### CSS Modules or Styled Components
+```tsx
+// Good - CSS Modules
+import styles from './UserCard.module.css';
+
+const UserCard: React.FC<{ user: User }> = ({ user }) => {
+  return (
+    <div className={styles.card}>
+      <h3 className={styles.title}>{user.name}</h3>
+      <p className={styles.email}>{user.email}</p>
+    </div>
+  );
+};
+
+// Good - Styled Components
+const StyledCard = styled.div`
+  padding: 1rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: white;
+  
+  &:hover {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+`;
+```
+
+## 📝 Form Handling
+
+### Controlled Components with Validation
+```tsx
+// Good - Form with validation
+interface FormData {
+  name: string;
+  email: string;
+  password: string;
+}
+
+interface FormErrors {
+  name?: string;
+  email?: string;
+  password?: string;
+}
+
+const RegistrationForm = () => {
+  const [formData, setFormData] = useState<FormData>({
+    name: '',
+    email: '',
+    password: ''
+  });
+  const [errors, setErrors] = useState<FormErrors>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const validateForm = (): boolean => {
+    const newErrors: FormErrors = {};
+    
+    if (!formData.name.trim()) {
+      newErrors.name = 'Name is required';
+    }
+    
+    if (!formData.email.trim()) {
+      newErrors.email = 'Email is required';
+    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
+      newErrors.email = 'Email is invalid';
+    }
+    
+    if (!formData.password) {
+      newErrors.password = 'Password is required';
+    } else if (formData.password.length < 8) {
+      newErrors.password = 'Password must be at least 8 characters';
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!validateForm()) return;
+    
+    setIsSubmitting(true);
+    try {
+      await registerUser(formData);
+      // Handle success
+    } catch (error) {
+      // Handle error
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <input
+        type="text"
+        value={formData.name}
+        onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+        placeholder="Name"
+      />
+      {errors.name && <span className="error">{errors.name}</span>}
+      
+      <button type="submit" disabled={isSubmitting}>
+        {isSubmitting ? 'Registering...' : 'Register'}
+      </button>
+    </form>
+  );
+};
+```
+
+## ✅ Testing Standards
+
+### Component Testing with React Testing Library
+```tsx
+// Good - Component test
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { UserProfile } from './UserProfile';
+
+describe('UserProfile', () => {
+  const mockUser = {
+    id: '1',
+    name: 'John Doe',
+    email: 'john@example.com'
+  };
+
+  it('displays user information when loaded', async () => {
+    // Mock API call
+    jest.spyOn(userService, 'getUser').mockResolvedValue(mockUser);
+    
+    render(<UserProfile userId="1" />);
+    
+    // Wait for loading to complete
+    await waitFor(() => {
+      expect(screen.getByText('John Doe')).toBeInTheDocument();
+      expect(screen.getByText('john@example.com')).toBeInTheDocument();
+    });
+  });
+
+  it('shows error message when API fails', async () => {
+    jest.spyOn(userService, 'getUser').mockRejectedValue(new Error('API Error'));
+    
+    render(<UserProfile userId="1" />);
+    
+    await waitFor(() => {
+      expect(screen.getByText('Failed to fetch user')).toBeInTheDocument();
+    });
+  });
+});
+```
+
+## 🚨 Error Handling
+
+### Error Boundaries
+```tsx
+// Good - Error boundary component
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error?: Error }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('Error caught by boundary:', error, errorInfo);
+    // Log to error reporting service
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="error-boundary">
+          <h2>Something went wrong</h2>
+          <p>Please refresh the page or try again later.</p>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+```
+
+## 🔧 Performance Optimization
+
+### Memoization
+```tsx
+// Good - Using React.memo and useMemo
+const ExpensiveComponent = React.memo<{ data: any[] }>(({ data }) => {
+  const processedData = useMemo(() => {
+    return data.map(item => ({
+      ...item,
+      processed: expensiveOperation(item)
+    }));
+  }, [data]);
+
+  return (
+    <div>
+      {processedData.map(item => (
+        <div key={item.id}>{item.processed}</div>
+      ))}
+    </div>
+  );
+});
+
+// Good - useCallback for event handlers
+const ParentComponent = () => {
+  const [count, setCount] = useState(0);
+  
+  const handleClick = useCallback(() => {
+    setCount(prev => prev + 1);
+  }, []);
+
+  return (
+    <div>
+      <ExpensiveComponent data={data} />
+      <button onClick={handleClick}>Count: {count}</button>
+    </div>
+  );
+};
+```
+
+## 📦 Code Splitting
+```tsx
+// Good - Lazy loading components
+const LazyComponent = React.lazy(() => import('./LazyComponent'));
+
+const App = () => {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/lazy" element={
+          <Suspense fallback={<LoadingSpinner />}>
+            <LazyComponent />
+          </Suspense>
+        } />
+      </Routes>
+    </Router>
+  );
+};
+```
+
+## 🎯 TypeScript Best Practices
+
+### Strict Type Definitions
+```tsx
+// Good - Strict typing
+interface ApiResponse<T> {
+  data: T;
+  status: 'success' | 'error';
+  message?: string;
+}
+
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// Good - Generic components
+interface ListProps<T> {
+  items: T[];
+  renderItem: (item: T) => React.ReactNode;
+  keyExtractor: (item: T) => string;
+}
+
+const List = <T,>({ items, renderItem, keyExtractor }: ListProps<T>) => {
+  return (
+    <ul>
+      {items.map(item => (
+        <li key={keyExtractor(item)}>
+          {renderItem(item)}
+        </li>
+      ))}
+    </ul>
+  );
+};
+```
+
+## 🎨 Tailwind CSS & shadcn/ui Best Practices
+
+### Tailwind CSS Guidelines
+- **Use utility classes** for consistent spacing and styling
+- **Leverage Tailwind's design system** (colors, spacing, typography)
+- **Use responsive prefixes** (sm:, md:, lg:, xl:, 2xl:)
+- **Create custom components** for repeated patterns
+- **Use @layer** for custom CSS organization
+
+```tsx
+// Good - Utility-first approach
+const Card = ({ children, className }) => (
+  <div className={cn(
+    "rounded-lg border bg-card text-card-foreground shadow-sm",
+    className
+  )}>
+    {children}
+  </div>
+);
+
+// Good - Responsive design
+const ResponsiveGrid = () => (
+  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    {/* content */}
+  </div>
+);
+```
+
+### shadcn/ui Component Standards
+- **Use the `cn()` utility** for class merging
+- **Leverage class-variance-authority** for component variants
+- **Follow shadcn/ui component patterns** for consistency
+- **Extend base components** rather than rebuilding from scratch
+
+```tsx
+// Good - shadcn/ui Button component pattern
+import { cva, type VariantProps } from "class-variance-authority"
+import { cn } from "@/lib/utils"
+
+const buttonVariants = cva(
+  "inline-flex items-center justify-center rounded-md text-sm font-medium",
+  {
+    variants: {
+      variant: {
+        default: "bg-primary text-primary-foreground hover:bg-primary/90",
+        outline: "border border-input hover:bg-accent hover:text-accent-foreground",
+      },
+      size: {
+        default: "h-10 px-4 py-2",
+        sm: "h-9 rounded-md px-3",
+        lg: "h-11 rounded-md px-8",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+      size: "default",
+    },
+  }
+)
+
+const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+  ({ className, variant, size, ...props }, ref) => {
+    return (
+      <button
+        className={cn(buttonVariants({ variant, size, className }))}
+        ref={ref}
+        {...props}
+      />
+    )
+  }
+)
+```
+
+### CSS Custom Properties & Design Tokens
+- **Use CSS custom properties** for theming
+- **Follow shadcn/ui color system** (--primary, --secondary, etc.)
+- **Support dark mode** with CSS custom properties
+- **Maintain consistent design tokens**
+
+```css
+/* Good - Design tokens in CSS custom properties */
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 84% 4.9%;
+  }
+}
+```
+
+### Component Composition Patterns
+```tsx
+// Good - Compound component pattern
+const Dialog = {
+  Root: DialogRoot,
+  Trigger: DialogTrigger,
+  Content: DialogContent,
+  Header: DialogHeader,
+  Title: DialogTitle,
+  Description: DialogDescription,
+}
+
+// Usage
+<Dialog.Root>
+  <Dialog.Trigger asChild>
+    <Button>Open Dialog</Button>
+  </Dialog.Trigger>
+  <Dialog.Content>
+    <Dialog.Header>
+      <Dialog.Title>Dialog Title</Dialog.Title>
+      <Dialog.Description>Dialog description</Dialog.Description>
+    </Dialog.Header>
+  </Dialog.Content>
+</Dialog.Root>
+```
+
+### Utility Function Best Practices
+```tsx
+// Good - cn() utility for class merging
+import { clsx, type ClassValue } from "clsx"
+import { twMerge } from "tailwind-merge"
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
+}
+
+// Usage in components
+const className = cn(
+  "base-classes",
+  condition && "conditional-classes",
+  props.className
+)
+```
+
+## 📦 Package Management
+- **Use Yarn** as the default package manager
+- **Commit yarn.lock** to version control (not package-lock.json)
+- **Use yarn commands** for all package operations:
+  - `yarn install` instead of `npm install`
+  - `yarn add <package>` instead of `npm install <package>`
+  - `yarn remove <package>` instead of `npm uninstall <package>`
+  - `yarn dev` instead of `npm run dev`
+
+## 🌍 Environment & Configuration
+- **Use environment variables** with proper typing
+- **Never commit sensitive data** to version control  
+- **Use different configs** for different environments
+- **Validate environment variables** on app startup
+
+```tsx
+// Good - Environment variables with validation
+const config = {
+  API_URL: import.meta.env.APP_API_URL || 'http://localhost:3001/api/v1',
+  NODE_ENV: import.meta.env.NODE_ENV || 'development',
+  VERSION: import.meta.env.VITE_APP_VERSION || '1.0.0',
+} as const;
+
+// Validate required environment variables
+if (!config.API_URL) {
+  throw new Error('APP_API_URL environment variable is required');
+}
+```

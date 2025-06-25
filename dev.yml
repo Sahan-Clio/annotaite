@@ -1,0 +1,26 @@
+version: "2.0"
+
+commands:
+  up:
+    summary: "🚀 Build & run everything"
+    command: |
+      echo "🐳 Starting development environment..."
+      docker compose up --build -d
+      echo "✅ Annot[AI]tor Services started!"
+      echo "🌐 Annot[AI]tor Frontend: http://localhost:5173"
+      echo "🔌 Annot[AI]tor Backend:  http://localhost:3001"
+      
+  down:
+    summary: "🛑 Stop & remove containers"
+    command: |
+      echo "🛑 Stopping all services..."
+      docker compose down -v
+  api.console:
+    summary: "🔌 Open Rails console"
+    command: |
+      docker compose exec api rails c
+      
+  db.shell:
+    summary: "🗄️ Open MySQL shell"
+    command: |
+      docker compose exec db mysql -u rails -ppassword annot_development 

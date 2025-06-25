@@ -1,0 +1,35 @@
+version: "3.8"
+
+services:
+  db:
+    image: mysql:8.0
+    container_name: annot-db
+    ports: [ "3306:3306" ]
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: annot_development
+      MYSQL_USER: rails
+      MYSQL_PASSWORD: password
+    volumes: [ db-data:/var/lib/mysql ]
+
+  api:
+    build: ./server
+    container_name: annot-api
+    env_file: [ ./server/.env ]
+    volumes: [ ./server:/app ]
+    ports: [ "3001:3001" ]
+    depends_on: [ db ]
+
+  web:
+    build: ./client
+    platform: linux/amd64
+    container_name: annot-web
+    env_file: [ ./client/.env.local ]
+    volumes: 
+      - ./client:/usr/src/app
+      - /usr/src/app/node_modules
+    ports: [ "5173:5173" ]
+    depends_on: [ api ]
+
+volumes:
+  db-data: 
