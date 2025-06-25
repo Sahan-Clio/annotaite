@@ -1,0 +1,109 @@
+# Annot[AI]tor Project Rules
+
+## 🐳 Development Environment
+This project runs entirely in **Docker containers**. Never run commands directly on the host machine.
+
+### Architecture
+- **Frontend**: React + TypeScript + Vite (port 5173)
+- **Backend**: Ruby on Rails API-only (port 3001)  
+- **Database**: MySQL 8.0 (port 3306)
+
+## 🛠️ Dev Commands Usage
+
+### Starting/Stopping Services
+```bash
+# Start all services (from root)
+dev up
+
+# Stop all services (from root)
+dev down
+```
+
+### Running Tests
+```bash
+# Run all tests (both frontend and backend)
+dev test
+
+# Run server tests only
+cd server && dev test
+
+# Run client tests only  
+cd client && dev test
+```
+
+### Server Commands (from server/ directory)
+```bash
+dev start          # Start Rails server
+dev console        # Rails console
+dev test           # Run RSpec tests
+dev test.watch     # Run tests with detailed output
+dev lint           # Run RuboCop
+dev lint.fix       # Auto-fix RuboCop issues
+dev db.migrate     # Run migrations
+dev db.setup       # Setup database
+dev routes         # Show all routes
+dev install        # Install gems
+dev generate       # Rails generators
+```
+
+### Client Commands (from client/ directory)
+```bash
+dev start          # Start Vite dev server
+dev test           # Run tests
+dev lint           # Run ESLint
+dev lint.fix       # Fix ESLint issues
+dev format         # Format with Prettier
+dev type-check     # TypeScript checking
+dev build          # Build for production
+dev install        # Install npm packages
+```
+
+### Root Commands (from project root)
+```bash
+dev up             # Start all services
+dev down           # Stop all services  
+dev test           # Run all tests
+dev api.console    # Open Rails console
+dev db.shell       # Open MySQL shell
+```
+
+## 🚫 What NOT to Do
+- **Never run `rails`, `bundle`, `npm`, or `yarn` directly** on host machine
+- **Never run `docker` commands directly** - use dev commands instead
+- **Never install dependencies** outside of Docker containers
+- **Never run tests** outside of Docker containers
+
+## ✅ What TO Do
+- **Always use `dev` commands** for all development tasks
+- **Always work within Docker containers** for consistency
+- **Use `dev up`** to start the development environment
+- **Use `dev test`** to run tests across all services
+- **Use service-specific dev commands** when working on individual components
+
+## 🔧 Debugging & Development
+- Use `dev api.console` for Rails debugging
+- Use `dev db.shell` for database inspection
+- Check Docker logs: `docker-compose logs [service]`
+- All file changes are synced via Docker volumes
+
+## 📁 Project Structure
+```
+annot-ai-tor/
+├── dev.yml                 # Root dev commands
+├── docker-compose.yml      # Docker services configuration
+├── server/                 # Rails API backend
+│   ├── dev.yml            # Server-specific dev commands
+│   └── ...
+├── client/                 # React frontend
+│   ├── dev.yml            # Client-specific dev commands
+│   └── ...
+└── .cursorrules           # This file
+```
+
+## 🎯 Key Principles
+1. **Docker-first development** - everything runs in containers
+2. **Dev command standardization** - consistent interface across all services
+3. **Service isolation** - frontend and backend are separate services
+4. **Environment consistency** - same setup across all developers
+
+Remember: When in doubt, use `dev --help` to see available commands! 

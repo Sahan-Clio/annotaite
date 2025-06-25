@@ -23,4 +23,15 @@ commands:
   db.shell:
     summary: "🗄️ Open MySQL shell"
     command: |
-      docker compose exec db mysql -u rails -ppassword annot_development 
+      docker compose exec db mysql -u rails -ppassword annot_development
+      
+  test:
+    summary: "🧪 Run all tests across all services"
+    command: |
+      echo "🧪 Running server tests..."
+      cd server && dev test
+      echo "✅ Server tests completed"
+      echo "🧪 Running client tests..."
+      cd client && dev test
+      echo "✅ Client tests completed"
+      echo "🎉 All tests completed!" 

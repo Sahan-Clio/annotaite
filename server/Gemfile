@@ -19,6 +19,9 @@ gem "tzinfo-data", platforms: %i[ windows jruby ]
 gem "rack-cors"
 gem "dotenv-rails"
 
+# Google Document AI
+gem "google-cloud-document_ai"
+
 group :development, :test do
   gem "debug", platforms: %i[ mri windows ]
   gem "rspec-rails"
