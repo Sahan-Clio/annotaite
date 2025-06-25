@@ -18,7 +18,11 @@ export function Home() {
 
   const handleUpload = () => {
     if (selectedFile) {
-      navigate(`/parse?filename=${encodeURIComponent(selectedFile.name)}`)
+      navigate('/parse', { 
+        state: { 
+          file: selectedFile 
+        } 
+      })
     }
   }
 
