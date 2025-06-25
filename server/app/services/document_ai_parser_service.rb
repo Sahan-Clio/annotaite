@@ -21,8 +21,8 @@ class DocumentAiParserService
       config.endpoint = "#{@location}-documentai.googleapis.com"
     end
 
-    # Read the hardcoded PDF file
-    file_content = File.read(HARDCODED_PDF_PATH)
+    # Read the hardcoded PDF file as binary
+    file_content = File.open(HARDCODED_PDF_PATH, 'rb') { |f| f.read }
 
     # Create the request
     request = {
@@ -33,8 +33,10 @@ class DocumentAiParserService
       }
     }
 
+    Rails.logger.info "Sending request to Google Document AI: \\n\#{request.inspect}"
     # Process the document
     response = client.process_document(request)
+    Rails.logger.info "Received response from Google Document AI: \\n\\#{response.inspect}"
     response.document
   end
 
