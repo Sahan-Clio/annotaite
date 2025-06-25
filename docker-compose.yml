@@ -4,7 +4,7 @@ services:
   db:
     image: mysql:8.0
     container_name: annot-db
-    ports: [ "3306:3306" ]
+    ports: [ "3307:3306" ]
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: annot_development
@@ -15,8 +15,11 @@ services:
   api:
     build: ./server
     container_name: annot-api
+    platform: linux/arm64
     env_file: [ ./server/.env ]
-    volumes: [ ./server:/app ]
+    volumes:
+      - ./server:/app
+      - /Users/kirankattekola/.config/gcloud/application_default_credentials.json:/root/.config/gcloud/application_default_credentials.json:ro
     ports: [ "3001:3001" ]
     depends_on: [ db ]
 

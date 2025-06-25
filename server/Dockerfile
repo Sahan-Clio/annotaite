@@ -1,6 +1,7 @@
-FROM ruby:3.2-alpine
+FROM ruby:3.2
 
-RUN apk add --no-cache build-base mysql-client mysql-dev tzdata nodejs yarn yaml-dev
+RUN apt-get update -qq && \
+    apt-get install -y build-essential default-mysql-client libmariadb-dev tzdata nodejs yarn
 
 WORKDIR /app
 
