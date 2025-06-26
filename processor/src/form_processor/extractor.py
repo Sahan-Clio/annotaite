@@ -117,97 +117,34 @@ def create_visual_field_map(pdf_path: Path, form_fields: List[Dict], debug_dir: 
 
 
 def extract_with_unstructured(pdf_path: Path, debug: bool = False, fast_mode: bool = True) -> Dict[str, Any]:
-    """
-    Extract form fields using Unstructured library - much faster than OpenCV approach.
-    
-    Args:
-        pdf_path: Path to PDF file
-        debug: Whether to save debug information and visual field maps
-        fast_mode: Use faster processing with reduced accuracy
-        
-    Returns:
-        Dictionary with extracted form fields and metadata
-    """
-    if not unstructured_available or partition_pdf is None:
-        raise ImportError("Unstructured library not available. Install with: pip install 'unstructured[pdf]'")
-    
     start_time = time.time()
     
     try:
-        # Create debug directory if needed
-        debug_dir = None
-        if debug:
-            debug_dir = Path("uploads/debug")
-            debug_dir.mkdir(parents=True, exist_ok=True)
+        from unstructured.partition.pdf import partition_pdf
         
-        print(f"🚀 Starting modern form field extraction (fast_mode={fast_mode})...")
+        elements = partition_pdf(
+            filename=str(pdf_path),
+            strategy="fast" if fast_mode else "hi_res",
+            infer_table_structure=False,
+            extract_images=False,
+            extract_image_block_types=[],
+            include_page_breaks=False
+        )
         
-        # Use different strategies based on fast_mode
-        if fast_mode:
-            # Faster processing with reduced accuracy
-            elements = partition_pdf(
-                str(pdf_path),
-                strategy="fast",
-                infer_table_structure=False,
-                extract_images_in_pdf=False,
-                include_page_breaks=False
-            )
-        else:
-            # More thorough processing
-            elements = partition_pdf(
-                str(pdf_path),
-                strategy="hi_res",
-                infer_table_structure=True,
-                extract_images_in_pdf=True
-            )
-        
-        print(f"📄 Processed PDF with {len(elements)} elements")
-        
-        # Extract form fields and other elements
         form_fields = []
-        text_blocks = []
-        tables = []
         
         for element in elements:
             element_data = {
-                'type': str(type(element).__name__),
                 'text': str(element),
-                'category': getattr(element, 'category', 'unknown')
+                'type': element.category,
+                'page': getattr(element.metadata, 'page_number', 1)
             }
             
-            # Extract metadata if available
-            metadata = {}
-            coordinates = {}
+            coordinates = getattr(element.metadata, 'coordinates', None)
             
-            if hasattr(element, 'metadata') and element.metadata:
-                try:
-                    # Try to access coordinates directly from metadata
-                    if hasattr(element.metadata, 'coordinates'):
-                        coord_obj = element.metadata.coordinates
-                        # Convert coordinates to serializable format
-                        if coord_obj and hasattr(coord_obj, 'to_dict'):
-                            coordinates = coord_obj.to_dict()
-                        elif coord_obj and hasattr(coord_obj, '__dict__'):
-                            coordinates = {k: v for k, v in coord_obj.__dict__.items() 
-                                         if not k.startswith('_')}
-                        elif coord_obj:
-                            coordinates = str(coord_obj)
-                    
-                    # Try to access other metadata attributes safely
-                    if hasattr(element.metadata, 'text_as_html'):
-                        metadata['text_as_html'] = element.metadata.text_as_html
-                        
-                except (AttributeError, TypeError):
-                    pass
-            
-            element_data['metadata'] = metadata
-            element_data['coordinates'] = coordinates
-            
-            # Convert coordinates to standard x, y, width, height format with normalization
             if coordinates and isinstance(coordinates, dict) and 'points' in coordinates:
                 points = coordinates['points']
                 if points and len(points) >= 2:
-                    # Extract min/max coordinates from points
                     x_coords = [point[0] for point in points]
                     y_coords = [point[1] for point in points]
                     
@@ -216,101 +153,36 @@ def extract_with_unstructured(pdf_path: Path, debug: bool = False, fast_mode: bo
                     x_max = max(x_coords)
                     y_max = max(y_coords)
                     
-                    # Get page dimensions for normalization
-                    page_width = coordinates.get('layout_width', 612.0)  # Default PDF width
-                    page_height = coordinates.get('layout_height', 792.0)  # Default PDF height
+                    page_width = coordinates.get('layout_width', 612.0)
+                    page_height = coordinates.get('layout_height', 792.0)
                     
-                    # Normalize coordinates to [0, 1] range
-                    normalized_x = x_min / page_width
-                    normalized_y = y_min / page_height
-                    normalized_width = (x_max - x_min) / page_width
-                    normalized_height = (y_max - y_min) / page_height
-                    
-                    # Add normalized coordinate format (0-1 range)
-                    element_data['x'] = normalized_x
-                    element_data['y'] = normalized_y
-                    element_data['width'] = normalized_width
-                    element_data['height'] = normalized_height
-                    
-                    # Also store raw pixel coordinates for debugging
-                    element_data['raw_x'] = x_min
-                    element_data['raw_y'] = y_min
-                    element_data['raw_width'] = x_max - x_min
-                    element_data['raw_height'] = y_max - y_min
-                    element_data['page_width'] = page_width
-                    element_data['page_height'] = page_height
-            
-            # Categorize elements
-            element_type = element_data['type'].lower()
-            category = element_data['category'].lower()
-            
-            # Consider various element types as potential form fields
-            if any(keyword in element_type for keyword in ['input', 'field', 'form']) or \
-               any(keyword in category for keyword in ['uncategorized', 'narrativetext', 'title']) or \
-               (coordinates and len(str(element).strip()) < 100):  # Short text with coordinates likely a field
-                form_fields.append(element_data)
-            elif 'table' in element_type or 'table' in category:
-                tables.append(element_data)
+                    element_data['x'] = x_min / page_width
+                    element_data['y'] = y_min / page_height
+                    element_data['width'] = (x_max - x_min) / page_width
+                    element_data['height'] = (y_max - y_min) / page_height
+                else:
+                    element_data['x'] = element_data['y'] = element_data['width'] = element_data['height'] = 0
             else:
-                text_blocks.append(element_data)
+                element_data['x'] = element_data['y'] = element_data['width'] = element_data['height'] = 0
+            
+            form_fields.append(element_data)
         
         processing_time = time.time() - start_time
-        
-        # Create visual field map if debug mode is enabled
-        visual_map_path = None
-        if debug and debug_dir and form_fields:
-            visual_map_path = create_visual_field_map(pdf_path, form_fields, debug_dir)
-        
-        # Save detailed results to debug file
-        if debug and debug_dir:
-            debug_data = {
-                'pdf_path': str(pdf_path),
-                'processing_time': processing_time,
-                'total_elements': len(elements),
-                'form_fields': form_fields,
-                'text_blocks': text_blocks,
-                'tables': tables,
-                'visual_map': visual_map_path
-            }
-            
-            debug_file = debug_dir / "extraction_results.json"
-            with open(debug_file, 'w') as f:
-                json.dump(debug_data, f, indent=2, default=str)
-            
-            print(f"💾 Debug data saved to: {debug_file}")
-        
-        result = {
-            'success': True,
-            'field_count': len(form_fields),
-            'table_count': len(tables),
-            'text_block_count': len(text_blocks),
-            'total_elements': len(elements),
-            'form_fields': form_fields,
-            'tables': tables,
-            'text_blocks': text_blocks,
-            'processing_time': processing_time,
-            'method': 'unstructured_fast' if fast_mode else 'unstructured_detailed',
-            'debug_dir': str(debug_dir) if debug_dir else None,
-            'visual_map': visual_map_path
-        }
-        
-        print(f"✅ Extraction completed in {processing_time:.2f}s")
-        print(f"📊 Found: {len(form_fields)} fields, {len(tables)} tables, {len(text_blocks)} text blocks")
-        
-        return result
-        
-    except Exception as e:
-        processing_time = time.time() - start_time
-        error_msg = f"Unstructured extraction failed: {str(e)}"
-        print(f"❌ {error_msg}")
         
         return {
-            'success': False,
-            'error': error_msg,
+            'success': True,
+            'form_fields': form_fields,
             'processing_time': processing_time,
-            'field_count': 0,
-            'table_count': 0,
-            'text_block_count': 0
+            'total_fields': len(form_fields)
+        }
+        
+    except Exception as e:
+        return {
+            'success': False,
+            'error': str(e),
+            'form_fields': [],
+            'processing_time': time.time() - start_time,
+            'total_fields': 0
         }
 
 

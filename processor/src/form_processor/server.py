@@ -226,28 +226,74 @@ def calculate_overlap(box1, box2):
     return intersection / union if union > 0 else 0.0
 
 
+def normalize_pixel_coordinates(pixel_boxes, image_width, image_height, pdf_width=612.0, pdf_height=792.0):
+    """Normalize pixel coordinates from image to 0-1 range based on PDF dimensions."""
+    normalized_boxes = []
+    
+    # Calculate scale factor from image pixels to PDF points
+    # Image is at 150 DPI, PDF is at 72 DPI
+    scale_x = pdf_width / image_width
+    scale_y = pdf_height / image_height
+    
+    for box in pixel_boxes:
+        # Convert pixel coordinates to PDF points, then normalize
+        pdf_x = box['x'] * scale_x
+        pdf_y = box['y'] * scale_y
+        pdf_width_box = box['width'] * scale_x
+        pdf_height_box = box['height'] * scale_y
+        
+        # Normalize to 0-1 range
+        normalized_box = {
+            **box,  # Keep all original properties
+            'x': pdf_x / pdf_width,
+            'y': pdf_y / pdf_height,
+            'width': pdf_width_box / pdf_width,
+            'height': pdf_height_box / pdf_height,
+            'raw_x': box['x'],  # Keep original pixel coordinates for debugging
+            'raw_y': box['y'],
+            'raw_width': box['width'],
+            'raw_height': box['height']
+        }
+        normalized_boxes.append(normalized_box)
+    
+    return normalized_boxes
+
+
 def process_single_page_for_fields(page_pdf_path, pdf_image, page_number, output_dir):
-    """Process a single page for form field detection (simplified version for server)"""
+    """Process a single page using separate pipelines for labels vs input fields with coordinate normalization"""
     try:
-        # Step 1: Extract text elements
+        print(f"📄 Processing page {page_number} with separate pipelines...")
+        
+        # Pipeline 1: Extract labels using Unstructured (new, separate)
+        text_labels = extract_labels_with_unstructured(page_pdf_path, page_number)
+        
+        # Pipeline 2: Extract input fields using EXISTING logic (unchanged)
+        # Step 1: Extract text elements (existing)
         text_elements = extract_text_elements_from_page(page_pdf_path, page_number)
         
-        # Step 2: Remove text from image (convert PIL to numpy array)
+        # Step 2: Remove text from image (existing)
         import numpy as np
         cv_image = np.array(pdf_image)
         cleaned_image = remove_text_elements_from_image(cv_image, text_elements)
         
-        # Step 3: Detect input fields
+        # Step 3: Detect input fields (existing)
         input_boxes, checkboxes = detect_input_boxes_and_checkboxes(cleaned_image)
+        
+        # Step 4: Normalize coordinates for input boxes and checkboxes
+        image_height, image_width = cv_image.shape[:2]
+        normalized_input_boxes = normalize_pixel_coordinates(input_boxes, image_width, image_height)
+        normalized_checkboxes = normalize_pixel_coordinates(checkboxes, image_width, image_height)
+        
+        print(f"  🔧 Normalized {len(input_boxes)} input boxes and {len(checkboxes)} checkboxes from {image_width}x{image_height} image")
         
         return {
             'page': page_number,
-            'text_elements': len(text_elements),
-            'input_boxes': len(input_boxes),
-            'checkboxes': len(checkboxes),
-            'text_elements_raw': text_elements,
-            'input_boxes_raw': input_boxes,
-            'checkboxes_raw': checkboxes
+            'text_elements': len(text_labels),  # Use Unstructured labels
+            'input_boxes': len(normalized_input_boxes),
+            'checkboxes': len(normalized_checkboxes),
+            'text_elements_raw': text_labels,  # Use Unstructured labels
+            'input_boxes_raw': normalized_input_boxes,  # Now normalized
+            'checkboxes_raw': normalized_checkboxes     # Now normalized
         }
         
     except Exception as e:
@@ -310,51 +356,45 @@ def process_pdf_for_form_fields(pdf_path):
             for page_result in all_results:
                 page_num = page_result['page']
                 
-                # Add text elements (labels)
+                # Add text elements (labels) - flatten coordinates for Rails compatibility
                 for text_elem in page_result.get('text_elements_raw', []):
                     element = {
                         'type': 'label',
                         'page': page_num,
                         'text': text_elem.get('text', ''),
-                        'coordinates': {
-                            'x': text_elem.get('x', 0),
-                            'y': text_elem.get('y', 0),
-                            'width': text_elem.get('width', 0),
-                            'height': text_elem.get('height', 0)
-                        }
+                        'x': text_elem.get('x', 0),
+                        'y': text_elem.get('y', 0),
+                        'width': text_elem.get('width', 0),
+                        'height': text_elem.get('height', 0)
                     }
                     all_elements.append(element)
                 
-                # Add input boxes
+                # Add input boxes - flatten coordinates for Rails compatibility
                 for input_box in page_result.get('input_boxes_raw', []):
                     element = {
                         'type': 'input',
                         'page': page_num,
                         'text': '',
-                        'coordinates': {
-                            'x': input_box['x'],
-                            'y': input_box['y'],
-                            'width': input_box['width'],
-                            'height': input_box['height']
-                        },
+                        'x': input_box['x'],
+                        'y': input_box['y'],
+                        'width': input_box['width'],
+                        'height': input_box['height'],
                         'detection_method': input_box.get('method', 'unknown'),
                         'area': input_box.get('area', 0),
                         'aspect_ratio': input_box.get('aspect_ratio', 0)
                     }
                     all_elements.append(element)
                 
-                # Add checkboxes
+                # Add checkboxes - flatten coordinates for Rails compatibility
                 for checkbox in page_result.get('checkboxes_raw', []):
                     element = {
                         'type': 'checkbox',
                         'page': page_num,
                         'text': '',
-                        'coordinates': {
-                            'x': checkbox['x'],
-                            'y': checkbox['y'],
-                            'width': checkbox['width'],
-                            'height': checkbox['height']
-                        },
+                        'x': checkbox['x'],
+                        'y': checkbox['y'],
+                        'width': checkbox['width'],
+                        'height': checkbox['height'],
                         'detection_method': checkbox.get('method', 'unknown'),
                         'area': checkbox.get('area', 0),
                         'aspect_ratio': checkbox.get('aspect_ratio', 0)
@@ -388,6 +428,29 @@ def process_pdf_for_form_fields(pdf_path):
         import traceback
         traceback.print_exc()
         raise
+
+
+def extract_labels_with_unstructured(page_pdf_path: Path, page_number: int):
+    """Extract text labels using Unstructured library (completely separate from input field detection)."""
+    try:
+        from .modern_extractor import extract_with_unstructured
+        
+        print(f"🔍 Extracting labels from page {page_number} using Unstructured...")
+        
+        # Use the proven Unstructured approach
+        result = extract_with_unstructured(page_pdf_path, debug=False, fast_mode=True)
+        
+        if result.get('success', False):
+            fields = result.get('form_fields', [])
+            print(f"  ✅ Found {len(fields)} text labels using Unstructured in {result.get('processing_time', 0):.2f}s")
+            return fields
+        else:
+            print(f"  ❌ Failed to extract labels from page {page_number}")
+            return []
+            
+    except Exception as e:
+        print(f"  ❌ Error extracting labels from page {page_number}: {e}")
+        return []
 
 
 app = Flask(__name__)

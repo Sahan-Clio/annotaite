@@ -75,30 +75,35 @@ class FormFieldProcessorService
     
     # Transform elements to match frontend Field interface
     fields = elements.map.with_index do |element, index|
-      # Convert absolute pixel coordinates to normalized coordinates (0-1 range)
-      coords = element['coordinates']
+      # The processor now returns normalized coordinates (0-1 range), so use them directly
       
-      # Normalize coordinates based on image dimensions
-      normalized_x_min = coords['x'].to_f / image_width
-      normalized_y_min = coords['y'].to_f / image_height
-      normalized_x_max = (coords['x'] + coords['width']).to_f / image_width
-      normalized_y_max = (coords['y'] + coords['height']).to_f / image_height
+      # Use normalized coordinates from processor (already in 0-1 range)
+      normalized_x = element['x'].to_f
+      normalized_y = element['y'].to_f
+      normalized_width = element['width'].to_f
+      normalized_height = element['height'].to_f
       
-      # Ensure coordinates are within 0-1 range
+      # Calculate bounding box coordinates
+      normalized_x_min = normalized_x
+      normalized_y_min = normalized_y
+      normalized_x_max = normalized_x + normalized_width
+      normalized_y_max = normalized_y + normalized_height
+      
+      # Ensure coordinates are within 0-1 range (safety check)
       normalized_x_min = [[normalized_x_min, 0.0].max, 1.0].min
       normalized_y_min = [[normalized_y_min, 0.0].max, 1.0].min
       normalized_x_max = [[normalized_x_max, 0.0].max, 1.0].min
       normalized_y_max = [[normalized_y_max, 0.0].max, 1.0].min
       
       bounding_box = {
-        page: element['page'],
+        page: element['page'] || 1,
         x_min: normalized_x_min,
         y_min: normalized_y_min,
         x_max: normalized_x_max,
         y_max: normalized_y_max
       }
       
-      Rails.logger.debug "Element #{index}: #{coords['x']},#{coords['y']} -> #{normalized_x_min.round(3)},#{normalized_y_min.round(3)}"
+      Rails.logger.debug "Element #{index}: normalized coords (#{normalized_x.round(3)}, #{normalized_y.round(3)}, #{normalized_width.round(3)}, #{normalized_height.round(3)})"
       
       # Map our types to frontend types
       field_type = case element['type']
