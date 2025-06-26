@@ -12,29 +12,39 @@ class DocumentAiParserService
     @location = ENV['DOC_AI_LOCATION'] || 'us'
     @processor_id = ENV['DOC_AI_PROCESSOR_ID'] || 'your-processor-id'
     @cache_dir = Rails.root.join('cache')
+    @cache_enabled = ENV['DOC_AI_CACHE_RESPONSE']&.downcase == 'true'
   end
 
   def parse
-    # Ensure cache directory exists
-    FileUtils.mkdir_p(@cache_dir)
+    # Ensure cache directory exists if caching is enabled
+    FileUtils.mkdir_p(@cache_dir) if @cache_enabled
     
     begin
       # Generate cache key based on filename and file content hash
-      cache_key = generate_cache_key
-      cache_file_path = @cache_dir.join("#{cache_key}.json")
+      cache_key = generate_cache_key if @cache_enabled
+      cache_file_path = @cache_dir.join("#{cache_key}.json") if @cache_enabled
       
-      # Check if cached response exists
+      # Check if cached response exists and caching is enabled
       safe_filename = @original_filename.to_s.encode('UTF-8', invalid: :replace, undef: :replace, replace: '_')
       
-      if File.exist?(cache_file_path)
+      if @cache_enabled && cache_file_path && File.exist?(cache_file_path)
         Rails.logger.info "✅ CACHE HIT: Using cached response for #{safe_filename}"
         Rails.logger.info "Cache file: #{cache_file_path}"
         document = load_cached_response(cache_file_path)
       else
-        Rails.logger.info "❌ CACHE MISS: Making Google Document AI API call for #{safe_filename}"
-        Rails.logger.info "Cache file will be: #{cache_file_path}"
+        if @cache_enabled
+          Rails.logger.info "❌ CACHE MISS: Making Google Document AI API call for #{safe_filename}"
+          Rails.logger.info "Cache file will be: #{cache_file_path}"
+        else
+          Rails.logger.info "🚫 CACHE DISABLED: Making Google Document AI API call for #{safe_filename}"
+        end
+        
         document = process_document
-        save_to_cache(document, cache_file_path)
+        
+        # Save to cache only if caching is enabled
+        if @cache_enabled && cache_file_path
+          save_to_cache(document, cache_file_path)
+        end
       end
       
       extract_data(document)
