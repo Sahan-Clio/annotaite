@@ -2,145 +2,153 @@ require 'net/http'
 require 'json'
 require 'tempfile'
 require 'timeout'
+require 'httparty'
 
 class FormFieldProcessorService
-  def initialize(pdf_path, document_ai_response, original_filename = nil)
-    @pdf_path = pdf_path
-    @document_ai_response = document_ai_response
-    @original_filename = original_filename || File.basename(pdf_path)
-    @processor_host = ENV['PROCESSOR_HOST'] || 'processor'
-    @processor_port = ENV['PROCESSOR_PORT'] || '8000'
+  include HTTParty
+  base_uri 'http://processor:8000'
+  
+  def initialize
+    @timeout = 30
   end
-
-  def process
-    Rails.logger.info "Starting form field processing for #{@original_filename}"
+  
+  def process_pdf(pdf_file_path)
+    Rails.logger.info "Processing PDF with form field processor: #{pdf_file_path}"
     
     begin
-      # Create temporary files for the processor
-      pdf_temp_file = create_temp_pdf_file
-      docai_temp_file = create_temp_docai_file
-      
-      # Call the processor service
-      result = call_processor_service(pdf_temp_file.path, docai_temp_file.path)
-      
-      Rails.logger.info "Form field processing completed successfully"
-      result
-      
-    ensure
-      # Clean up temporary files
-      cleanup_temp_files(pdf_temp_file, docai_temp_file)
-    end
-  end
-
-  private
-
-  def create_temp_pdf_file
-    temp_file = Tempfile.new(['processor_input', '.pdf'], binmode: true)
-    
-    # Copy the PDF content to a new temp file for the processor
-    File.open(@pdf_path, 'rb') do |source|
-      temp_file.write(source.read)
-    end
-    temp_file.rewind
-    
-    Rails.logger.info "Created temp PDF file: #{temp_file.path}"
-    temp_file
-  end
-
-  def create_temp_docai_file
-    temp_file = Tempfile.new(['processor_docai', '.json'])
-    
-    # Write the Document AI response as JSON
-    temp_file.write(JSON.pretty_generate(@document_ai_response))
-    temp_file.rewind
-    
-    Rails.logger.info "Created temp Document AI file: #{temp_file.path}"
-    temp_file
-  end
-
-  def call_processor_service(pdf_path, docai_path)
-    Rails.logger.info "Calling processor service at #{@processor_host}:#{@processor_port}"
-    
-    # Prepare the multipart form data
-    boundary = "----WebKitFormBoundary#{SecureRandom.hex(16)}"
-    
-    # Build multipart body
-    body = build_multipart_body(pdf_path, docai_path, boundary)
-    
-    # Make HTTP request to processor service
-    uri = URI("http://#{@processor_host}:#{@processor_port}/process")
-    
-    http = Net::HTTP.new(uri.host, uri.port)
-    http.read_timeout = 300 # 5 minutes timeout for processing
-    
-    request = Net::HTTP::Post.new(uri)
-    request['Content-Type'] = "multipart/form-data; boundary=#{boundary}"
-    request.body = body
-    
-    Rails.logger.info "Sending request to processor service..."
-    response = http.request(request)
-    
-    case response.code.to_i
-    when 200
-      Rails.logger.info "Processor service responded successfully"
-      JSON.parse(response.body)
-    when 400
-      error_msg = JSON.parse(response.body)['error'] rescue 'Bad request'
-      Rails.logger.error "Processor service bad request: #{error_msg}"
-      raise StandardError.new("Form field processing failed: #{error_msg}")
-    when 500
-      error_msg = JSON.parse(response.body)['error'] rescue 'Internal server error'
-      Rails.logger.error "Processor service internal error: #{error_msg}"
-      raise StandardError.new("Form field processing failed: #{error_msg}")
-    else
-      Rails.logger.error "Processor service unexpected response: #{response.code} #{response.message}"
-      raise StandardError.new("Form field processing failed: Unexpected response from processor service")
-    end
-    
-  rescue Timeout::Error, Net::ReadTimeout => e
-    Rails.logger.error "Processor service timeout: #{e.message}"
-    raise StandardError.new("Form field processing timed out. Please try again.")
-  rescue Errno::ECONNREFUSED => e
-    Rails.logger.error "Cannot connect to processor service: #{e.message}"
-    raise StandardError.new("Form field processing service is unavailable. Please try again later.")
-  rescue JSON::ParserError => e
-    Rails.logger.error "Invalid JSON response from processor service: #{e.message}"
-    raise StandardError.new("Form field processing failed: Invalid response format")
-  end
-
-  def build_multipart_body(pdf_path, docai_path, boundary)
-    body = "".force_encoding('ASCII-8BIT')
-    
-    # Add PDF file
-    body << "--#{boundary}\r\n".force_encoding('ASCII-8BIT')
-    body << "Content-Disposition: form-data; name=\"pdf_file\"; filename=\"#{@original_filename}\"\r\n".force_encoding('ASCII-8BIT')
-    body << "Content-Type: application/pdf\r\n\r\n".force_encoding('ASCII-8BIT')
-    body << File.binread(pdf_path)
-    body << "\r\n".force_encoding('ASCII-8BIT')
-    
-    # Add Document AI JSON file
-    body << "--#{boundary}\r\n".force_encoding('ASCII-8BIT')
-    body << "Content-Disposition: form-data; name=\"docai_file\"; filename=\"docai_response.json\"\r\n".force_encoding('ASCII-8BIT')
-    body << "Content-Type: application/json\r\n\r\n".force_encoding('ASCII-8BIT')
-    body << File.read(docai_path, encoding: 'UTF-8').force_encoding('ASCII-8BIT')
-    body << "\r\n".force_encoding('ASCII-8BIT')
-    
-    # Close boundary
-    body << "--#{boundary}--\r\n".force_encoding('ASCII-8BIT')
-    
-    body
-  end
-
-  def cleanup_temp_files(*temp_files)
-    temp_files.compact.each do |temp_file|
-      begin
-        if temp_file && !temp_file.closed?
-          temp_file.close
-          temp_file.unlink
-        end
-      rescue StandardError => e
-        Rails.logger.warn "Error cleaning up temp file: #{e.message}"
+      # Check if processor is healthy
+      health_response = self.class.get('/health', timeout: 5)
+      unless health_response.success?
+        raise "Processor service is not healthy: #{health_response.code}"
       end
+      
+      # Prepare the PDF file for upload
+      pdf_file = File.open(pdf_file_path, 'rb')
+      
+      # Call the processor with just the PDF file
+      response = self.class.post('/process_pdf', 
+        timeout: @timeout,
+        body: {
+          pdf_file: pdf_file
+        }
+      )
+      
+      pdf_file.close
+      
+      if response.success?
+        result = response.parsed_response
+        Rails.logger.info "Processor returned #{result['summary']['total_elements']} elements"
+        
+        # Transform the processor output to match frontend expectations
+        transform_processor_output(result)
+      else
+        Rails.logger.error "Processor request failed: #{response.code} - #{response.body}"
+        raise "Processor request failed with status #{response.code}"
+      end
+      
+    rescue Timeout::Error => e
+      Rails.logger.error "Processor request timed out: #{e.message}"
+      raise "Processor request timed out after #{@timeout} seconds"
+    rescue StandardError => e
+      Rails.logger.error "Processor request failed: #{e.message}"
+      raise "Failed to process PDF: #{e.message}"
     end
+  end
+  
+  private
+  
+  def transform_processor_output(processor_result)
+    # Transform processor output to match frontend overlay format
+    elements = processor_result['elements'] || []
+    
+    # Get page dimensions from processor result or use defaults
+    # The processor should ideally return page dimensions, but for now use standard PDF dimensions
+    page_width = 612.0   # Standard PDF width in points (8.5 inches * 72 points/inch)
+    page_height = 792.0  # Standard PDF height in points (11 inches * 72 points/inch)
+    
+    # However, our processor works with images at 150 DPI, so we need to convert
+    # At 150 DPI: 8.5" = 1275 pixels, 11" = 1650 pixels
+    image_width = 1275.0   # Width of PDF image at 150 DPI
+    image_height = 1650.0  # Height of PDF image at 150 DPI
+    
+    Rails.logger.info "Normalizing coordinates from image dimensions: #{image_width}x#{image_height}"
+    
+    # Transform elements to match frontend Field interface
+    fields = elements.map.with_index do |element, index|
+      # Convert absolute pixel coordinates to normalized coordinates (0-1 range)
+      coords = element['coordinates']
+      
+      # Normalize coordinates based on image dimensions
+      normalized_x_min = coords['x'].to_f / image_width
+      normalized_y_min = coords['y'].to_f / image_height
+      normalized_x_max = (coords['x'] + coords['width']).to_f / image_width
+      normalized_y_max = (coords['y'] + coords['height']).to_f / image_height
+      
+      # Ensure coordinates are within 0-1 range
+      normalized_x_min = [[normalized_x_min, 0.0].max, 1.0].min
+      normalized_y_min = [[normalized_y_min, 0.0].max, 1.0].min
+      normalized_x_max = [[normalized_x_max, 0.0].max, 1.0].min
+      normalized_y_max = [[normalized_y_max, 0.0].max, 1.0].min
+      
+      bounding_box = {
+        page: element['page'],
+        x_min: normalized_x_min,
+        y_min: normalized_y_min,
+        x_max: normalized_x_max,
+        y_max: normalized_y_max
+      }
+      
+      Rails.logger.debug "Element #{index}: #{coords['x']},#{coords['y']} -> #{normalized_x_min.round(3)},#{normalized_y_min.round(3)}"
+      
+      # Map our types to frontend types
+      field_type = case element['type']
+                   when 'label' then 'form_field_label'
+                   when 'input' then 'form_field_input'
+                   when 'checkbox' then 'checkbox'
+                   else 'static_text'
+                   end
+      
+      # Create field object matching frontend expectations
+      field = {
+        id: "field_#{element['page']}_#{index}",
+        type: field_type,
+        text: element['text'] || '',
+        page: element['page'],
+        bounding_box: bounding_box
+      }
+      
+      # Add form field info for inputs and checkboxes
+      if element['type'] != 'label'
+        field[:form_field_info] = {
+          field_type: element['type'] == 'checkbox' ? 'checkbox' : 'text',
+          is_required: false
+        }
+      end
+      
+      field
+    end
+    
+    # Create document info
+    total_pages = elements.map { |e| e['page'] }.max || 1
+    page_dimensions = (1..total_pages).map do |page_num|
+      {
+        page: page_num,
+        width: page_width,
+        height: page_height
+      }
+    end
+    
+    Rails.logger.info "Transformed #{fields.count} fields with normalized coordinates"
+    
+    # Return structure matching frontend expectations
+    {
+      success: true,
+      fields: fields,
+      total_fields: fields.count,
+      document_info: {
+        total_pages: total_pages,
+        page_dimensions: page_dimensions
+      }
+    }
   end
 end 
