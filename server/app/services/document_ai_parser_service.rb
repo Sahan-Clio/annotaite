@@ -4,9 +4,9 @@ class DocumentAiParserService
   HARDCODED_PDF_PATH = Rails.root.join('data', 'forms', 'i-907_Jaz6iX6.pdf').freeze
 
   def initialize
-    @project_id = ENV.fetch('DOC_AI_PROJECT_ID')
-    @location = ENV.fetch('DOC_AI_LOCATION')
-    @processor_id = ENV.fetch('DOC_AI_PROCESSOR_ID')
+    @project_id = ENV['DOC_AI_PROJECT_ID']
+    @location = ENV['DOC_AI_LOCATION']
+    @processor_id = ENV['DOC_AI_PROCESSOR_ID']
   end
 
   def call
@@ -21,8 +21,8 @@ class DocumentAiParserService
       config.endpoint = "#{@location}-documentai.googleapis.com"
     end
 
-    # Read the hardcoded PDF file
-    file_content = File.read(HARDCODED_PDF_PATH)
+    # Read the hardcoded PDF file in binary mode
+    file_content = File.read(HARDCODED_PDF_PATH, mode: 'rb')
 
     # Create the request
     request = {

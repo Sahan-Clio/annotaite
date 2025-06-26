@@ -1,6 +1,13 @@
-FROM ruby:3.2-alpine
+FROM ruby:3.2-slim
 
-RUN apk add --no-cache build-base mysql-client mysql-dev tzdata nodejs yarn yaml-dev
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    default-mysql-client \
+    default-libmysqlclient-dev \
+    libyaml-dev \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
