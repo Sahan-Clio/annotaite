@@ -233,7 +233,7 @@ export function Home() {
           {/* Footer */}
           <div className="mt-12 text-center">
             <p className="text-sm text-gray-400">
-              Powered by Google Document AI • Built with React & Rails
+              Built with React & Rails
             </p>
           </div>
         </div>
