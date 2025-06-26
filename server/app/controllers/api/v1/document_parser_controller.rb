@@ -19,21 +19,31 @@ class Api::V1::DocumentParserController < ApplicationController
         }, status: :bad_request
       end
 
-      # Create temporary file
-      temp_file = Tempfile.new(['uploaded', '.pdf'])
-      temp_file.binmode
-      temp_file.write(uploaded_file.read)
-      temp_file.rewind
-
-      # Initialize service with file path and original filename
-      parser_service = DocumentAiParserService.new(temp_file.path, uploaded_file.original_filename)
+      # Create temporary file with explicit binary mode
+      temp_file = Tempfile.new(['uploaded', '.pdf'], binmode: true)
       
-      # Parse the document
-      result = parser_service.parse
+      begin
+        # Read uploaded file in binary mode and write to temp file
+        uploaded_content = uploaded_file.read
+        temp_file.write(uploaded_content)
+        temp_file.rewind
+        
+        Rails.logger.info "Created temp file: #{temp_file.path}, size: #{uploaded_content.size} bytes"
+        Rails.logger.info "Original filename: #{uploaded_file.original_filename}"
+        
+        # Initialize service with file path and original filename
+        parser_service = DocumentAiParserService.new(temp_file.path, uploaded_file.original_filename)
       
-      # Clean up temporary file
-      temp_file.close
-      temp_file.unlink
+              # Parse the document
+        result = parser_service.parse
+        
+      ensure
+        # Clean up temporary file
+        if temp_file
+          temp_file.close
+          temp_file.unlink
+        end
+      end
       
       # Return the enhanced structure
       render json: result, status: :ok

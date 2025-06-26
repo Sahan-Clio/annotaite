@@ -8,9 +8,9 @@ class DocumentAiParserService
     @file_path = file_path
     @original_filename = original_filename || File.basename(file_path)
     @client = Google::Cloud::DocumentAI.document_processor_service
-    @project_id = ENV['GOOGLE_CLOUD_PROJECT_ID'] || 'your-project-id'
-    @location = ENV['GOOGLE_CLOUD_LOCATION'] || 'us'
-    @processor_id = ENV['GOOGLE_CLOUD_PROCESSOR_ID'] || 'your-processor-id'
+    @project_id = ENV['DOC_AI_PROJECT_ID'] || 'your-project-id'
+    @location = ENV['DOC_AI_LOCATION'] || 'us'
+    @processor_id = ENV['DOC_AI_PROCESSOR_ID'] || 'your-processor-id'
     @cache_dir = Rails.root.join('cache')
   end
 
@@ -18,21 +18,34 @@ class DocumentAiParserService
     # Ensure cache directory exists
     FileUtils.mkdir_p(@cache_dir)
     
-    # Generate cache key based on filename and file content hash
-    cache_key = generate_cache_key
-    cache_file_path = @cache_dir.join("#{cache_key}.json")
-    
-    # Check if cached response exists
-    if File.exist?(cache_file_path)
-      Rails.logger.info "Using cached response for #{@original_filename}"
-      document = load_cached_response(cache_file_path)
-    else
-      Rails.logger.info "Making Google Document AI API call for #{@original_filename}"
-      document = process_document
-      save_to_cache(document, cache_file_path)
+    begin
+      # Generate cache key based on filename and file content hash
+      cache_key = generate_cache_key
+      cache_file_path = @cache_dir.join("#{cache_key}.json")
+      
+      # Check if cached response exists
+      safe_filename = @original_filename.to_s.encode('UTF-8', invalid: :replace, undef: :replace, replace: '_')
+      
+      if File.exist?(cache_file_path)
+        Rails.logger.info "✅ CACHE HIT: Using cached response for #{safe_filename}"
+        Rails.logger.info "Cache file: #{cache_file_path}"
+        document = load_cached_response(cache_file_path)
+      else
+        Rails.logger.info "❌ CACHE MISS: Making Google Document AI API call for #{safe_filename}"
+        Rails.logger.info "Cache file will be: #{cache_file_path}"
+        document = process_document
+        save_to_cache(document, cache_file_path)
+      end
+      
+      extract_data(document)
+    rescue Encoding::UndefinedConversionError, Encoding::InvalidByteSequenceError => e
+      Rails.logger.error "Encoding error during document parsing: #{e.message}"
+      raise StandardError.new("Document encoding error. Please ensure the PDF file is not corrupted.")
+    rescue StandardError => e
+      Rails.logger.error "Error during document parsing: #{e.message}"
+      Rails.logger.error e.backtrace.join("\n")
+      raise e
     end
-    
-    extract_data(document)
   end
 
   private
@@ -41,7 +54,11 @@ class DocumentAiParserService
     # Create a unique cache key based on filename and file content
     file_content = File.binread(@file_path)
     content_hash = Digest::SHA256.hexdigest(file_content)
-    filename_safe = @original_filename.gsub(/[^a-zA-Z0-9._-]/, '_')
+    
+    # Ensure filename is properly encoded and sanitized
+    filename_safe = @original_filename.to_s.encode('UTF-8', invalid: :replace, undef: :replace, replace: '_')
+    filename_safe = filename_safe.gsub(/[^a-zA-Z0-9._-]/, '_')
+    
     "#{filename_safe}_#{content_hash[0..16]}"
   end
 
@@ -61,13 +78,26 @@ class DocumentAiParserService
 
   def save_to_cache(document, cache_file_path)
     Rails.logger.info "Saving response to cache: #{cache_file_path}"
-    # Save the full document structure for caching
-    cache_data = {
-      document: document.to_h,
-      cached_at: Time.current.iso8601,
-      original_filename: @original_filename
-    }
-    File.write(cache_file_path, JSON.pretty_generate(cache_data))
+    
+    begin
+      # Convert document to hash with encoding protection
+      document_hash = convert_document_to_hash(document)
+      
+      # Save the full document structure for caching
+      cache_data = {
+        document: document_hash,
+        cached_at: Time.current.iso8601,
+        original_filename: @original_filename.to_s.encode('UTF-8', invalid: :replace, undef: :replace, replace: '_')
+      }
+      
+      # Write with explicit encoding
+      File.write(cache_file_path, JSON.pretty_generate(cache_data), encoding: 'UTF-8')
+      Rails.logger.info "Successfully saved to cache"
+    rescue StandardError => e
+      Rails.logger.error "Error saving to cache: #{e.message}"
+      Rails.logger.error "Error class: #{e.class}"
+      # Don't re-raise since caching failure shouldn't stop processing
+    end
   end
 
   def process_document
@@ -79,6 +109,7 @@ class DocumentAiParserService
 
     # Read the file in binary mode
     file_content = File.binread(@file_path)
+    Rails.logger.info "File size: #{file_content.size} bytes"
 
     request = {
       name: processor_name,
@@ -88,32 +119,110 @@ class DocumentAiParserService
       }
     }
 
-    response = @client.process_document(request)
-    response.document
+    begin
+      Rails.logger.info "Making Document AI API call..."
+      response = @client.process_document(request)
+      Rails.logger.info "Document AI API call successful"
+      response.document
+    rescue StandardError => e
+      Rails.logger.error "Document AI API error: #{e.message}"
+      Rails.logger.error "Error class: #{e.class}"
+      Rails.logger.error e.backtrace.join("\n")
+      raise e
+    end
   end
 
   def create_document_struct(document_data)
     # Create a struct-like object that behaves like the Google API response
-    OpenStruct.new(document_data.deep_symbolize_keys)
+    # Don't use deep_symbolize_keys as it can cause issues with mixed key access
+    # Instead, create an object that responds to both string and symbol keys
+    OpenStruct.new(document_data)
+  end
+
+  def convert_document_to_hash(document)
+    # Safely convert document to hash with encoding protection
+    begin
+      if document.respond_to?(:to_h)
+        raw_hash = document.to_h
+      elsif document.respond_to?(:to_hash)
+        raw_hash = document.to_hash
+      else
+        # Fallback: try to convert to string and parse as JSON
+        document_str = document.to_s.encode('UTF-8', invalid: :replace, undef: :replace, replace: '')
+        raw_hash = JSON.parse(document_str)
+      end
+      
+      # Clean the hash to ensure it's JSON-serializable
+      clean_hash_for_json(raw_hash)
+    rescue StandardError => e
+      Rails.logger.error "Error converting document to hash: #{e.message}"
+      # Return a minimal structure if conversion fails
+      {
+        error: "Failed to convert document",
+        message: e.message,
+        text: "",
+        pages: []
+      }
+    end
+  end
+
+  def clean_hash_for_json(obj)
+    case obj
+    when Hash
+      obj.each_with_object({}) do |(key, value), cleaned|
+        # Ensure key is a clean string
+        clean_key = key.to_s.encode('UTF-8', invalid: :replace, undef: :replace, replace: '')
+        cleaned[clean_key] = clean_hash_for_json(value)
+      end
+    when Array
+      obj.map { |item| clean_hash_for_json(item) }
+    when String
+      # Clean strings to ensure they're UTF-8 compatible
+      obj.encode('UTF-8', invalid: :replace, undef: :replace, replace: '')
+    when Numeric, TrueClass, FalseClass, NilClass
+      obj
+    else
+      # Convert other objects to clean strings
+      obj.to_s.encode('UTF-8', invalid: :replace, undef: :replace, replace: '')
+    end
   end
 
   def extract_data(document_data)
     fields = []
     field_id_counter = 1
 
-    # Extract document info
-    document_info = extract_document_info(document_data)
+    begin
+      Rails.logger.info "Starting data extraction from document"
+      Rails.logger.info "Document data class: #{document_data.class}"
+      Rails.logger.info "Document data has pages: #{document_data.respond_to?(:pages) && document_data.pages.present?}"
+      Rails.logger.info "Document data pages count: #{document_data.pages&.length || 0}"
+      
+      # Extract document info
+      document_info = extract_document_info(document_data)
+      Rails.logger.info "Document info extracted: #{document_info[:total_pages]} pages"
 
     # Process each page
-    document_data.pages.each do |page|
+    document_data.pages.each_with_index do |page, index|
+      Rails.logger.info "Processing page #{index + 1}"
+      Rails.logger.info "Page class: #{page.class}"
+      Rails.logger.info "Page keys: #{page.respond_to?(:keys) ? page.keys : 'no keys method'}"
+      
       page_number = page['page_number'] || page[:page_number]
+      Rails.logger.info "Page number: #{page_number}"
 
       # Extract form fields (labels and inputs)
-      (page['form_fields'] || page[:form_fields] || []).each do |form_field|
+      form_fields = page['form_fields'] || page[:form_fields] || []
+      Rails.logger.info "Form fields count: #{form_fields.length}"
+      
+      form_fields.each_with_index do |form_field, ff_index|
+        Rails.logger.info "Processing form field #{ff_index + 1}"
+        
         # Extract field name (label)
         field_name = form_field['field_name'] || form_field[:field_name]
         if field_name && field_name['text_anchor'] && field_name['text_anchor']['text_segments']&.any?
           field_text = extract_text_from_anchor(document_data.text, field_name['text_anchor'])
+          Rails.logger.info "Field name text: '#{field_text.strip}'"
+          
           bounding_box = extract_bounding_box_with_fallback(
             field_name['bounding_poly'],
             field_text,
@@ -131,6 +240,9 @@ class DocumentAiParserService
               bounding_box: bounding_box
             )
             field_id_counter += 1
+            Rails.logger.info "Added field name: #{field_text.strip}"
+          else
+            Rails.logger.warn "No bounding box for field name: #{field_text.strip}"
           end
         end
 
@@ -138,6 +250,8 @@ class DocumentAiParserService
         field_value = form_field['field_value'] || form_field[:field_value]
         if field_value && field_value['text_anchor'] && field_value['text_anchor']['text_segments']&.any?
           field_text = extract_text_from_anchor(document_data.text, field_value['text_anchor'])
+          Rails.logger.info "Field value text: '#{field_text.strip}'"
+          
           bounding_box = extract_bounding_box_with_fallback(
             field_value['bounding_poly'],
             field_text,
@@ -155,12 +269,18 @@ class DocumentAiParserService
               bounding_box: bounding_box
             )
             field_id_counter += 1
+            Rails.logger.info "Added field value: #{field_text.strip}"
+          else
+            Rails.logger.warn "No bounding box for field value: #{field_text.strip}"
           end
         end
       end
 
       # Extract all paragraph text elements
-      (page['paragraphs'] || page[:paragraphs] || []).each do |paragraph|
+      paragraphs = page['paragraphs'] || page[:paragraphs] || []
+      Rails.logger.info "Paragraphs count: #{paragraphs.length}"
+      
+      paragraphs.each_with_index do |paragraph, p_index|
         layout = paragraph['layout'] || paragraph[:layout]
         next unless layout && layout['bounding_poly'] && layout['bounding_poly']['vertices']&.any?
 
@@ -178,16 +298,38 @@ class DocumentAiParserService
           bounding_box: bounding_box
         )
         field_id_counter += 1
+        
+        if p_index < 3  # Log first 3 paragraphs
+          Rails.logger.info "Added paragraph: #{field_text.strip[0..50]}..."
+        end
       end
     end
 
-    # Remove duplicate fields (same text and similar position)
-    fields = deduplicate_fields(fields)
+      # Remove duplicate fields (same text and similar position)
+      fields = deduplicate_fields(fields)
+      
+      Rails.logger.info "Data extraction complete: #{fields.length} fields found"
 
-    {
-      document_info: document_info,
-      fields: fields
-    }
+      {
+        document_info: document_info,
+        fields: fields
+      }
+    rescue Encoding::UndefinedConversionError, Encoding::InvalidByteSequenceError => e
+      Rails.logger.error "Encoding error during data extraction: #{e.message}"
+      Rails.logger.error e.backtrace.join("\n")
+      
+      # Return a minimal response with error info
+      {
+        document_info: { total_pages: 0, page_dimensions: [] },
+        fields: [],
+        error: "Encoding error during text extraction",
+        details: e.message
+      }
+    rescue StandardError => e
+      Rails.logger.error "Error during data extraction: #{e.message}"
+      Rails.logger.error e.backtrace.join("\n")
+      raise e
+    end
   end
 
   def extract_document_info(document_data)
@@ -234,10 +376,13 @@ class DocumentAiParserService
   end
 
   def create_field(id:, type:, text:, page:, bounding_box:)
+    # Ensure text is properly encoded
+    safe_text = text.to_s.encode('UTF-8', invalid: :replace, undef: :replace, replace: '').strip
+    
     field = {
       id: id,
       type: type,
-      text: text,
+      text: safe_text,
       page: page,
       bounding_box: bounding_box
     }
@@ -245,7 +390,7 @@ class DocumentAiParserService
     # Add form field info for relevant types
     if type == 'form_field_label' || type == 'form_field_input'
       field[:form_field_info] = {
-        field_type: infer_field_input_type(text, type)
+        field_type: infer_field_input_type(safe_text, type)
       }
     end
 
@@ -317,6 +462,9 @@ class DocumentAiParserService
   def extract_text_from_anchor(full_text, text_anchor)
     return '' unless text_anchor && text_anchor['text_segments']
 
+    # Ensure full_text is properly encoded
+    full_text = full_text.to_s.encode('UTF-8', invalid: :replace, undef: :replace, replace: '') if full_text
+
     result = ''
     text_anchor['text_segments'].each do |segment|
       start_index = segment['start_index'] || segment[:start_index] || 0
@@ -327,7 +475,9 @@ class DocumentAiParserService
       end_index = [end_index, full_text.length].min
       
       if start_index < end_index && start_index < full_text.length
-        result += full_text[start_index...end_index]
+        extracted_text = full_text[start_index...end_index]
+        # Ensure extracted text is properly encoded
+        result += extracted_text.to_s.encode('UTF-8', invalid: :replace, undef: :replace, replace: '')
       end
     end
     result
