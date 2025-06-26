@@ -30,6 +30,7 @@ const Parse: React.FC = () => {
   const pdfViewerRef = useRef<HTMLDivElement>(null);
   const [fieldTypesOpen, setFieldTypesOpen] = useState(true);
   const [fieldsOpen, setFieldsOpen] = useState(true);
+  const [hiddenFields, setHiddenFields] = useState<Set<string>>(new Set());
 
   // Get the uploaded file from navigation state
   const uploadedFile = (location.state as any)?.file as File | undefined;
@@ -200,7 +201,9 @@ const Parse: React.FC = () => {
   const getVisibleFields = () => {
     if (!parseData) return [];
     
-    let filteredFields = parseData.fields.filter(field => visibleFieldTypes.has(field.type));
+    let filteredFields = parseData.fields.filter(field => 
+      visibleFieldTypes.has(field.type) && !hiddenFields.has(field.id)
+    );
     
     // Apply search filter if search term exists
     if (searchTerm.trim()) {
@@ -247,6 +250,15 @@ const Parse: React.FC = () => {
       (pageContainer as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   };
+
+  // Handle field close/hide
+  const handleFieldClose = useCallback((fieldId: string) => {
+    setHiddenFields(prev => new Set([...prev, fieldId]));
+    // If the closed field was selected, clear selection
+    if (selectedField?.id === fieldId) {
+      setSelectedField(null);
+    }
+  }, [selectedField]);
 
   // Collapse field types filter when a field is selected
   useEffect(() => {
@@ -621,6 +633,7 @@ const Parse: React.FC = () => {
                         onClick={() => setSelectedField(field)}
                         isSelected={selectedField?.id === field.id}
                         onPositionChange={handlePositionChange}
+                        onClose={handleFieldClose}
                       />
                     </div>
                   ))}
