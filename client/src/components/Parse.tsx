@@ -1,257 +1,264 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
 import { parseDocument } from '../api/parseApi';
-import type { ParseResponse, FormField } from '../types/api';
 import { PdfViewer } from './PdfViewer';
 import OverlayBox from './OverlayBox';
+import type { ParseResponse, Field, FieldType } from '../types/api';
 
 const Parse: React.FC = () => {
-  const navigate = useNavigate();
-  const location = useLocation();
   const [parseData, setParseData] = useState<ParseResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [pdfDimensions, setPdfDimensions] = useState<{ width: number; height: number } | null>(null);
-  const [highlightedItem, setHighlightedItem] = useState<string | null>(null);
-  const pdfViewerRef = useRef<any>(null);
-  const hasCalledApi = useRef(false);
+  const [selectedField, setSelectedField] = useState<Field | null>(null);
+  const [visibleFieldTypes, setVisibleFieldTypes] = useState<Set<FieldType>>(new Set([
+    'form_field_label',
+    'form_field_input',
+    'section_header',
+    'instruction_text',
+    'checkbox',
+    'signature_area',
+    'static_text'
+  ]));
 
-  // Get file from location state
-  const file = location.state?.file as File | undefined;
-  const filename = file?.name || 'Unknown file';
-
-  const handlePdfLoadSuccess = useCallback((numPages: number, pageDimensions: { width: number; height: number }) => {
-    console.log('PDF loaded successfully:', numPages, 'pages, dimensions:', pageDimensions);
-    setPdfDimensions(pageDimensions);
-  }, []);
-
-  // Calculate scale factor based on available space
-  const calculateScaleFactor = useCallback(() => {
-    if (!pdfDimensions) return 1;
-    
-    const maxWidth = window.innerWidth * 0.6; // 60% of viewport width (accounting for sidebar)
-    const maxHeight = window.innerHeight * 0.8; // 80% of viewport height
-    
-    const scaleX = maxWidth / pdfDimensions.width;
-    const scaleY = maxHeight / pdfDimensions.height;
-    
-    // Use the smaller scale to ensure PDF fits in both dimensions
-    return Math.min(scaleX, scaleY, 1); // Don't scale up beyond 100%
-  }, [pdfDimensions]);
-
-  const scaleFactor = calculateScaleFactor();
-  const scaledWidth = pdfDimensions ? pdfDimensions.width * scaleFactor : 800;
-  const scaledHeight = pdfDimensions ? pdfDimensions.height * scaleFactor : 600;
+  const fieldTypeColors = {
+    form_field_label: { bg: 'bg-blue-100', border: 'border-blue-500', text: 'text-blue-800' },
+    form_field_input: { bg: 'bg-green-100', border: 'border-green-500', text: 'text-green-800' },
+    section_header: { bg: 'bg-purple-100', border: 'border-purple-500', text: 'text-purple-800' },
+    instruction_text: { bg: 'bg-yellow-100', border: 'border-yellow-500', text: 'text-yellow-800' },
+    checkbox: { bg: 'bg-orange-100', border: 'border-orange-500', text: 'text-orange-800' },
+    signature_area: { bg: 'bg-red-100', border: 'border-red-500', text: 'text-red-800' },
+    static_text: { bg: 'bg-gray-100', border: 'border-gray-500', text: 'text-gray-800' }
+  };
 
   useEffect(() => {
-    if (!file || hasCalledApi.current) return;
-
-    const fetchParseData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        hasCalledApi.current = true;
-        const data = await parseDocument(file);
-        setParseData(data);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to parse document');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchParseData();
-  }, [file]);
-
-  // Recalculate scale on window resize
-  useEffect(() => {
-    const handleResize = () => {
-      // Force re-render to recalculate scale
-      if (pdfDimensions) {
-        setPdfDimensions({ ...pdfDimensions });
-      }
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [pdfDimensions]);
-
-  const handlePositionChange = useCallback((id: string, x: number, y: number) => {
-    console.log(`Position changed for ${id}:`, { x, y });
+    handleParse();
   }, []);
 
-  const handleSizeChange = useCallback((id: string, width: number, height: number) => {
-    console.log(`Size changed for ${id}:`, { width, height });
-  }, []);
+  const handleParse = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await parseDocument();
+      setParseData(data);
+      console.log('Parse data received:', data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to parse document');
+      console.error('Parse error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  // Memoize overlay items for the menu
-  const overlayItems = useMemo(() => {
+  const toggleFieldType = (fieldType: FieldType) => {
+    const newVisibleTypes = new Set(visibleFieldTypes);
+    if (newVisibleTypes.has(fieldType)) {
+      newVisibleTypes.delete(fieldType);
+    } else {
+      newVisibleTypes.add(fieldType);
+    }
+    setVisibleFieldTypes(newVisibleTypes);
+  };
+
+  const getFieldTypeCount = (fieldType: FieldType) => {
+    return parseData?.fields.filter(field => field.type === fieldType).length || 0;
+  };
+
+  const getVisibleFields = () => {
     if (!parseData) return [];
-    
-    return parseData.fields.map(field => ({
-      id: `field-${field.name}`,
-      label: field.name,
-      type: 'field' as const,
-      item: field
-    }));
-  }, [parseData]);
+    return parseData.fields.filter(field => visibleFieldTypes.has(field.type));
+  };
 
-  if (!file) {
+  const getFieldTypeLabel = (fieldType: FieldType) => {
+    switch (fieldType) {
+      case 'form_field_label': return 'Labels';
+      case 'form_field_input': return 'Inputs';
+      case 'section_header': return 'Headers';
+      case 'instruction_text': return 'Instructions';
+      case 'checkbox': return 'Checkboxes';
+      case 'signature_area': return 'Signatures';
+      case 'static_text': return 'Static Text';
+      default: return fieldType;
+    }
+  };
+
+  if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">No file selected</h1>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Parsing document with Google Document AI...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center p-8 bg-red-50 rounded-lg max-w-md">
+          <div className="text-red-600 mb-4">
+            <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-semibold text-red-800 mb-2">Parsing Failed</h3>
+          <p className="text-red-600 mb-4">{error}</p>
           <button
-            onClick={() => navigate('/')}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90"
+            onClick={handleParse}
+            className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
           >
-            Go back to upload
+            Try Again
           </button>
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="min-h-screen bg-background">
-      <div className="flex h-screen">
-        {/* Main content area */}
-        <div className="flex-1 flex flex-col">
-          {/* Header with filename and back button */}
-          <div className="border-b bg-card p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-xl font-semibold text-foreground mb-2">
-                  Parsing: {filename}
-                </h1>
-                <button
-                  onClick={() => navigate('/')}
-                  className="px-3 py-1.5 text-sm bg-secondary text-secondary-foreground rounded hover:bg-secondary/80 transition-colors"
-                >
-                  ← Back to Uploads
-                </button>
-              </div>
-              <div className="text-sm text-muted-foreground">
-                {loading && 'Parsing document...'}
-                {error && `Error: ${error}`}
-                {parseData && `Found ${parseData.fields.length} fields`}
-              </div>
-            </div>
-          </div>
+  if (!parseData) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <p className="text-gray-600">No data available</p>
+      </div>
+    );
+  }
 
-          {/* PDF viewer area - centered */}
-          <div className="flex-1 flex items-center justify-center p-6 overflow-auto">
-            <div 
-              className="relative border border-border rounded-lg shadow-lg bg-white"
-              style={{
-                width: scaledWidth,
-                height: scaledHeight,
-                maxWidth: '100%',
-                maxHeight: '100%',
-              }}
+  const visibleFields = getVisibleFields();
+
+  return (
+    <div className="flex h-screen bg-gray-100">
+      {/* Sidebar */}
+      <div className="w-80 bg-white shadow-lg border-r border-gray-200 flex flex-col">
+        {/* Header */}
+        <div className="p-4 border-b border-gray-200">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-lg font-semibold text-gray-800">Document Analysis</h2>
+            <button
+              onClick={handleParse}
+              className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
             >
-              <PdfViewer
-                ref={pdfViewerRef}
-                fileUrl={`/i-907_Jaz6iX6.pdf`}
-                onLoadSuccess={handlePdfLoadSuccess}
-                scale={scaleFactor}
-              />
-              
-              {/* Overlay container - only show when both PDF and data are loaded */}
-              {parseData && pdfDimensions && (
-                <div 
-                  className="absolute inset-0"
-                  style={{
-                    width: scaledWidth,
-                    height: scaledHeight,
-                    pointerEvents: 'none',
-                    zIndex: 5,
-                  }}
-                >
-                  {/* All fields */}
-                  {parseData.fields.map((field) => (
-                    <OverlayBox
-                      key={`field-${field.name}`}
-                      item={field}
-                      bounds={{
-                        width: scaledWidth,
-                        height: scaledHeight,
-                      }}
-                      onPositionChange={handlePositionChange}
-                      onSizeChange={handleSizeChange}
-                      isHighlighted={highlightedItem === `field-${field.name}`}
-                    />
-                  ))}
-                </div>
-              )}
-              
-              {/* Loading overlay when PDF dimensions aren't ready */}
-              {!pdfDimensions && (
-                <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-75">
-                  <div className="text-center">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-                    <p className="text-muted-foreground">Loading PDF...</p>
-                  </div>
-                </div>
-              )}
-            </div>
+              Refresh
+            </button>
+          </div>
+          <div className="text-sm text-gray-600">
+            <p>{parseData.document_info.total_pages} pages • {parseData.fields.length} fields total</p>
+            <p>{visibleFields.length} fields visible</p>
           </div>
         </div>
 
-        {/* Right sidebar with overlay menu */}
-        <div className="w-80 border-l bg-card">
-          <div className="p-4 border-b">
-            <h2 className="text-lg font-semibold text-foreground">Overlays</h2>
-            <p className="text-sm text-muted-foreground mt-1">
-              Hover to highlight on PDF
-            </p>
+        {/* Field Type Filters */}
+        <div className="p-4 border-b border-gray-200">
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">Field Types</h3>
+          <div className="space-y-2">
+            {Object.keys(fieldTypeColors).map((fieldType) => {
+              const typedFieldType = fieldType as FieldType;
+              const count = getFieldTypeCount(typedFieldType);
+              const colors = fieldTypeColors[typedFieldType];
+              const isVisible = visibleFieldTypes.has(typedFieldType);
+              
+              return (
+                <label key={fieldType} className="flex items-center cursor-pointer group">
+                  <input
+                    type="checkbox"
+                    checked={isVisible}
+                    onChange={() => toggleFieldType(typedFieldType)}
+                    className="mr-3"
+                  />
+                  <div className={`w-4 h-4 rounded border-2 ${colors.border} ${colors.bg} mr-2`}></div>
+                  <span className="text-sm text-gray-700 group-hover:text-gray-900 flex-1">
+                    {getFieldTypeLabel(typedFieldType)}
+                  </span>
+                  <span className="text-xs text-gray-500 ml-2">({count})</span>
+                </label>
+              );
+            })}
           </div>
+        </div>
+
+        {/* Selected Field Info */}
+        {selectedField && (
+          <div className="p-4 border-b border-gray-200">
+            <h3 className="text-sm font-semibold text-gray-700 mb-2">Selected Field</h3>
+            <div className="space-y-2 text-sm">
+              <div>
+                <span className="font-medium text-gray-600">Type:</span>
+                <span className={`ml-2 px-2 py-1 rounded text-xs ${fieldTypeColors[selectedField.type]?.bg} ${fieldTypeColors[selectedField.type]?.text}`}>
+                  {getFieldTypeLabel(selectedField.type)}
+                </span>
+              </div>
+              <div>
+                <span className="font-medium text-gray-600">Text:</span>
+                <p className="mt-1 text-gray-800 break-words">{selectedField.text}</p>
+              </div>
+              <div>
+                <span className="font-medium text-gray-600">Page:</span>
+                <span className="ml-2 text-gray-800">{selectedField.page}</span>
+              </div>
+              <div>
+                <span className="font-medium text-gray-600">ID:</span>
+                <span className="ml-2 text-gray-500 font-mono text-xs">{selectedField.id}</span>
+              </div>
+              {selectedField.form_field_info && (
+                <div>
+                  <span className="font-medium text-gray-600">Input Type:</span>
+                  <span className="ml-2 text-gray-800">{selectedField.form_field_info.field_type}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Field List */}
+        <div className="flex-1 overflow-y-auto p-4">
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">Fields ({visibleFields.length})</h3>
+          <div className="space-y-2">
+            {visibleFields.map((field) => {
+              const colors = fieldTypeColors[field.type];
+              const isSelected = selectedField?.id === field.id;
+              
+              return (
+                <div
+                  key={field.id}
+                  className={`p-3 rounded border cursor-pointer transition-all ${
+                    isSelected 
+                      ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200' 
+                      : `${colors.border} ${colors.bg} hover:shadow-md`
+                  }`}
+                  onClick={() => setSelectedField(field)}
+                >
+                  <div className="flex items-start justify-between mb-1">
+                    <span className={`text-xs px-2 py-1 rounded ${colors.bg} ${colors.text} font-medium`}>
+                      {getFieldTypeLabel(field.type)}
+                    </span>
+                    <span className="text-xs text-gray-500">Page {field.page}</span>
+                  </div>
+                  <p className="text-sm text-gray-800 break-words line-clamp-2">
+                    {field.text}
+                  </p>
+                  <div className="text-xs text-gray-500 mt-1 font-mono">
+                    {field.id}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* PDF Viewer */}
+      <div className="flex-1 relative">
+        <div className="relative w-full h-full">
+          <PdfViewer fileUrl="/i-907_Jaz6iX6.pdf" />
           
-          <div className="overflow-y-auto max-h-full">
-            {/* Fields section */}
-            {overlayItems.length > 0 && (
-              <div className="p-4">
-                <h3 className="text-sm font-medium text-foreground mb-3 flex items-center">
-                  <div className="w-3 h-3 bg-blue-500 rounded-full mr-2"></div>
-                  Fields ({overlayItems.length})
-                </h3>
-                <div className="space-y-2">
-                  {overlayItems.map((item) => (
-                    <div
-                      key={item.id}
-                      className="p-2 rounded border border-border hover:bg-accent hover:border-blue-500 cursor-pointer transition-all duration-200"
-                      onMouseEnter={() => setHighlightedItem(item.id)}
-                      onMouseLeave={() => setHighlightedItem(null)}
-                    >
-                      <div className="text-sm font-medium text-foreground truncate">
-                        {item.label}
-                      </div>
-                      <div className="text-xs text-muted-foreground mt-1">
-                        Field
-                      </div>
-                    </div>
-                  ))}
-                </div>
+          {/* Overlay container */}
+          <div className="absolute inset-0 pointer-events-none">
+            {visibleFields.map((field) => (
+              <div key={field.id} className="pointer-events-auto">
+                <OverlayBox
+                  field={field}
+                  onClick={() => setSelectedField(field)}
+                  isSelected={selectedField?.id === field.id}
+                />
               </div>
-            )}
-
-            {/* Empty state */}
-            {overlayItems.length === 0 && !loading && (
-              <div className="p-4 text-center">
-                <div className="text-muted-foreground text-sm">
-                  {error ? 'Failed to load overlays' : 'No overlays found'}
-                </div>
-              </div>
-            )}
-
-            {/* Loading state */}
-            {loading && (
-              <div className="p-4 text-center">
-                <div className="text-muted-foreground text-sm">
-                  Loading overlays...
-                </div>
-              </div>
-            )}
+            ))}
           </div>
         </div>
       </div>
