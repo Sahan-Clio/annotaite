@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import type { Field, PageDimension } from '../types/api';
 
 interface OverlayBoxProps {
@@ -6,32 +6,63 @@ interface OverlayBoxProps {
   pageDimensions?: PageDimension;
   onClick?: () => void;
   isSelected?: boolean;
+  onPositionChange?: (fieldId: string, newPosition: { x: number; y: number; width: number; height: number }) => void;
 }
 
-const OverlayBox: React.FC<OverlayBoxProps> = ({ field, pageDimensions, onClick, isSelected = false }) => {
+const OverlayBox: React.FC<OverlayBoxProps> = ({ 
+  field, 
+  pageDimensions, 
+  onClick, 
+  isSelected = false,
+  onPositionChange 
+}) => {
+  const [isDragging, setIsDragging] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
+  const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
+  const [position, setPosition] = useState({
+    x: field.bounding_box.x_min * 100,
+    y: field.bounding_box.y_min * 100,
+    width: (field.bounding_box.x_max - field.bounding_box.x_min) * 100,
+    height: (field.bounding_box.y_max - field.bounding_box.y_min) * 100
+  });
+  
+  const overlayRef = useRef<HTMLDivElement>(null);
+
   const getFieldTypeStyle = () => {
-    const baseStyle = "absolute border-2 transition-all duration-200 hover:shadow-lg cursor-pointer overflow-hidden";
+    const baseStyle = "absolute border-2 overflow-hidden";
+    const interactionStyle = isDragging ? "cursor-grabbing" : isResizing ? "cursor-se-resize" : "cursor-grab";
+    const transitionStyle = (isDragging || isResizing) ? "" : "transition-all duration-200";
+    const hoverStyle = "hover:shadow-lg";
     
+    let colorStyle = "";
     switch (field.type) {
       case 'form_field_label':
-        return `${baseStyle} border-blue-500 bg-blue-100 hover:bg-blue-200`;
+        colorStyle = "border-blue-500 bg-blue-100 hover:bg-blue-200";
+        break;
       case 'form_field_input':
-        return `${baseStyle} border-green-500 bg-green-100 hover:bg-green-200`;
+        colorStyle = "border-green-500 bg-green-100 hover:bg-green-200";
+        break;
       case 'section_header':
-        return `${baseStyle} border-purple-500 bg-purple-100 hover:bg-purple-200`;
+        colorStyle = "border-purple-500 bg-purple-100 hover:bg-purple-200";
+        break;
       case 'instruction_text':
-        return `${baseStyle} border-yellow-500 bg-yellow-100 hover:bg-yellow-200`;
+        colorStyle = "border-yellow-500 bg-yellow-100 hover:bg-yellow-200";
+        break;
       case 'checkbox':
-        return `${baseStyle} border-orange-500 bg-orange-100 hover:bg-orange-200`;
+        colorStyle = "border-orange-500 bg-orange-100 hover:bg-orange-200";
+        break;
       case 'signature_area':
-        return `${baseStyle} border-red-500 bg-red-100 hover:bg-red-200`;
+        colorStyle = "border-red-500 bg-red-100 hover:bg-red-200";
+        break;
       default:
-        return `${baseStyle} border-gray-500 bg-gray-100 hover:bg-gray-200`;
+        colorStyle = "border-gray-500 bg-gray-100 hover:bg-gray-200";
     }
+    
+    return `${baseStyle} ${interactionStyle} ${transitionStyle} ${hoverStyle} ${colorStyle}`;
   };
 
   const getSelectedStyle = () => {
-    return isSelected ? "ring-4 ring-blue-300 shadow-xl z-20" : "z-10";
+    return isSelected ? "ring-4 ring-blue-300 shadow-xl z-[1003]" : "z-[1002]";
   };
 
   const getFieldTypeLabel = () => {
@@ -55,95 +86,186 @@ const OverlayBox: React.FC<OverlayBoxProps> = ({ field, pageDimensions, onClick,
     return null;
   };
 
-  // Calculate position within the page container
-  // The bounding box coordinates are normalized (0-1) relative to the page
-  const rawWidth = (field.bounding_box.x_max - field.bounding_box.x_min) * 100;
-  const rawHeight = (field.bounding_box.y_max - field.bounding_box.y_min) * 100;
+  // Calculate expanded dimensions for better visibility
+  const rawWidth = position.width;
+  const rawHeight = position.height;
   
-  // Ensure minimum visibility - make small boxes larger
-  const minWidth = Math.max(rawWidth, 2); // At least 2% of page width
-  const minHeight = Math.max(rawHeight, 1); // At least 1% of page height
+  const minWidth = Math.max(rawWidth, 1);
+  const minHeight = Math.max(rawHeight, 0.5);
   
-  // For very small elements, expand them slightly for better visibility
-  const expandedWidth = rawWidth < 5 ? Math.max(rawWidth * 1.5, 3) : rawWidth;
-  const expandedHeight = rawHeight < 2 ? Math.max(rawHeight * 2, 1.5) : rawHeight;
+  // Always use actual dimensions - remove the expansion logic that was interfering with resize
+  const expandedWidth = rawWidth;
+  const expandedHeight = rawHeight;
 
-  const style = {
-    left: `${field.bounding_box.x_min * 100}%`,
-    top: `${field.bounding_box.y_min * 100}%`,
-    width: `${expandedWidth}%`,
-    height: `${expandedHeight}%`,
-    minWidth: `${minWidth}%`,
-    minHeight: `${minHeight}%`,
-  };
+  // Mouse event handlers for dragging
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    console.log('Mouse down on overlay', field.id);
+    e.preventDefault();
+    e.stopPropagation();
+    
+    setIsDragging(true);
+    setLastMousePos({ x: e.clientX, y: e.clientY });
+    
+    onClick?.();
+  }, [onClick, field.id]);
 
-  // Determine appropriate font size based on box dimensions
-  const getFontSize = () => {
-    if (expandedWidth > 25 && expandedHeight > 5) return 'text-xs'; // Very large boxes
-    if (expandedWidth > 15 && expandedHeight > 3) return 'text-xs'; // Large boxes
-    if (expandedWidth > 8 && expandedHeight > 2) return 'text-xs'; // Medium boxes
-    if (expandedWidth > 4 && expandedHeight > 1.2) return 'text-xs'; // Small boxes
-    return 'text-xs'; // Very small boxes - use smallest available
-  };
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    const parent = overlayRef.current?.parentElement;
+    if (!parent) return;
+    
+    const parentRect = parent.getBoundingClientRect();
+    
+    // Calculate how much the mouse moved since last time
+    const deltaX = e.clientX - lastMousePos.x;
+    const deltaY = e.clientY - lastMousePos.y;
+    
+    // Convert pixel movement to percentage of parent container
+    const deltaXPercent = (deltaX / parentRect.width) * 100;
+    const deltaYPercent = (deltaY / parentRect.height) * 100;
+    
+    if (isDragging) {
+      // Move the overlay by the mouse delta
+      setPosition(prev => {
+        const newX = Math.max(0, Math.min(95, prev.x + deltaXPercent));
+        const newY = Math.max(0, Math.min(95, prev.y + deltaYPercent));
+        
+        if (Math.abs(deltaX) > 1 || Math.abs(deltaY) > 1) {
+          console.log(`Drag [${field.id}]: ${newX.toFixed(1)}%, ${newY.toFixed(1)}%`);
+        }
+        
+        return { ...prev, x: newX, y: newY };
+      });
+    }
+    
+    if (isResizing) {
+      // Resize the overlay by the mouse delta
+      setPosition(prev => {
+        const newWidth = Math.max(1, Math.min(50, prev.width + deltaXPercent));
+        const newHeight = Math.max(0.5, Math.min(50, prev.height + deltaYPercent));
+        
+        if (Math.abs(deltaX) > 1 || Math.abs(deltaY) > 1) {
+          console.log(`Resize [${field.id}]:`, {
+            deltaY: deltaY.toFixed(0),
+            prevHeight: prev.height.toFixed(1),
+            newHeight: newHeight.toFixed(1),
+            size: `${newWidth.toFixed(1)}% x ${newHeight.toFixed(1)}%`
+          });
+        }
+        
+        return { ...prev, width: newWidth, height: newHeight };
+      });
+    }
+    
+    // Update mouse position for next movement
+    setLastMousePos({ x: e.clientX, y: e.clientY });
+  }, [isDragging, isResizing, lastMousePos, field.id]);
 
-  // Get custom font size for very small boxes
+  const handleMouseUp = useCallback(() => {
+    if (isDragging || isResizing) {
+      setIsDragging(false);
+      setIsResizing(false);
+      
+      // Notify parent of position change
+      onPositionChange?.(field.id, {
+        x: position.x / 100,
+        y: position.y / 100,
+        width: position.width / 100,
+        height: position.height / 100
+      });
+    }
+  }, [isDragging, isResizing, position, field.id, onPositionChange]);
+
+  // Resize handle mouse down
+  const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
+    console.log('Resize handle clicked for', field.id);
+    e.preventDefault();
+    e.stopPropagation();
+    
+    setIsResizing(true);
+    setIsDragging(false);
+    setLastMousePos({ x: e.clientX, y: e.clientY });
+  }, [field.id]);
+
+  // Add global mouse event listeners
+  React.useEffect(() => {
+    if (isDragging || isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isDragging, isResizing, handleMouseMove, handleMouseUp]);
+
+  // Get custom font size for overlays - improved for zoom
   const getCustomFontSize = () => {
-    if (expandedWidth > 20 && expandedHeight > 4) return '8px'; // Large boxes
-    if (expandedWidth > 12 && expandedHeight > 2.5) return '7px'; // Medium boxes
-    if (expandedWidth > 6 && expandedHeight > 1.5) return '6px'; // Small boxes
-    if (expandedWidth > 3 && expandedHeight > 1) return '5px'; // Very small boxes
-    return '4px'; // Tiny boxes
+    if (expandedWidth > 15 && expandedHeight > 3) return '12px';
+    if (expandedWidth > 10 && expandedHeight > 2) return '10px';
+    if (expandedWidth > 6 && expandedHeight > 1.5) return '8px';
+    if (expandedWidth > 3 && expandedHeight > 1) return '7px';
+    if (expandedWidth > 1.5 && expandedHeight > 0.7) return '6px';
+    return '5px';
   };
 
-  // Calculate how much text can fit in a single line
+  // Calculate how much text can fit in a single line - improved for zoom
   const getDisplayText = () => {
     const text = field.text.trim();
     
-    // Estimate characters that fit based on box width and font size
-    // Very rough approximation: 1% width ≈ 1-2 characters depending on font size
     let maxChars;
     
-    if (expandedWidth > 25) {
-      maxChars = Math.floor(expandedWidth * 1.8); // ~45 chars for 25% width
-    } else if (expandedWidth > 15) {
-      maxChars = Math.floor(expandedWidth * 1.5); // ~22 chars for 15% width
-    } else if (expandedWidth > 8) {
-      maxChars = Math.floor(expandedWidth * 1.2); // ~10 chars for 8% width
-    } else if (expandedWidth > 4) {
-      maxChars = Math.floor(expandedWidth * 1.0); // ~4 chars for 4% width
-    } else if (expandedWidth > 2) {
-      maxChars = Math.floor(expandedWidth * 0.8); // ~2 chars for 2% width
+    // Better character estimation with zoom factor
+    if (expandedWidth > 20) {
+      maxChars = Math.floor(expandedWidth * 2.2);
+    } else if (expandedWidth > 12) {
+      maxChars = Math.floor(expandedWidth * 2.0);
+    } else if (expandedWidth > 6) {
+      maxChars = Math.floor(expandedWidth * 1.8);
+    } else if (expandedWidth > 3) {
+      maxChars = Math.floor(expandedWidth * 1.5);
+    } else if (expandedWidth > 1.5) {
+      maxChars = Math.floor(expandedWidth * 1.2);
     } else {
-      maxChars = 1; // Just 1 character for very tiny boxes
+      maxChars = 2;
     }
     
-    // Ensure minimum of 1 character
-    maxChars = Math.max(1, maxChars);
+    maxChars = Math.max(2, maxChars);
     
     if (text.length <= maxChars) {
       return text;
     }
     
-    // For longer text, truncate and add ellipsis only if there's room
-    if (maxChars > 3) {
+    if (maxChars > 4) {
       return `${text.substring(0, maxChars - 3)}...`;
-    } else if (maxChars > 1) {
+    } else if (maxChars > 2) {
       return `${text.substring(0, maxChars - 1)}…`;
     } else {
-      return text.substring(0, 1);
+      return text.substring(0, 2);
     }
+  };
+
+  const style = {
+    left: `${position.x}%`,
+    top: `${position.y}%`,
+    width: `${expandedWidth}%`,
+    height: `${expandedHeight}%`,
+    minWidth: `${minWidth}%`,
+    minHeight: `${minHeight}%`,
+    userSelect: 'none' as const,
   };
 
   return (
     <div
+      ref={overlayRef}
       className={`${getFieldTypeStyle()} ${getSelectedStyle()}`}
       style={style}
-      onClick={onClick}
+      onMouseDown={handleMouseDown}
       title={`${getFieldTypeLabel()}: ${field.text} (Page ${field.page}) - Size: ${rawWidth.toFixed(1)}% x ${rawHeight.toFixed(1)}%`}
     >
       {/* Field type indicator - show for selected fields or larger fields */}
       {(isSelected || expandedWidth > 15) && (
-        <div className="absolute -top-6 left-0 flex items-center space-x-1">
+        <div className="absolute -top-6 left-0 flex items-center space-x-1 pointer-events-none">
           <span className="text-xs font-bold px-2 py-1 rounded-t bg-white border border-gray-300 shadow-sm whitespace-nowrap">
             {getFieldTypeLabel()}
           </span>
@@ -157,7 +279,7 @@ const OverlayBox: React.FC<OverlayBoxProps> = ({ field, pageDimensions, onClick,
       
       {/* Field content - single line only */}
       <div 
-        className={`w-full h-full flex items-center justify-center text-gray-800 text-center`}
+        className={`w-full h-full flex items-center justify-center text-gray-800 text-center drag-handle`}
         style={{
           fontSize: getCustomFontSize(),
           padding: '0.5px',
@@ -171,18 +293,32 @@ const OverlayBox: React.FC<OverlayBoxProps> = ({ field, pageDimensions, onClick,
         {getDisplayText()}
       </div>
       
+      {/* Resize handle - only show when selected */}
+      {isSelected && (
+        <div
+          className="absolute bottom-0 right-0 w-4 h-4 bg-blue-500 border-2 border-white cursor-se-resize hover:bg-blue-600 z-[1004]"
+          onMouseDown={handleResizeMouseDown}
+          style={{
+            borderRadius: '0 0 4px 0',
+            transform: 'translate(50%, 50%)',
+          }}
+          title="Drag to resize"
+        />
+      )}
+      
       {/* Field ID for debugging - only show when selected */}
       {isSelected && (
-        <div className="absolute -bottom-4 left-0 text-xs text-gray-500 bg-white px-1 rounded whitespace-nowrap">
-          {field.id} ({rawWidth.toFixed(1)}% x {rawHeight.toFixed(1)}%)
+        <div className="absolute -bottom-8 left-0 text-xs text-gray-500 bg-white px-1 rounded whitespace-nowrap pointer-events-none">
+          <div>{field.id} ({rawWidth.toFixed(1)}% x {rawHeight.toFixed(1)}%)</div>
+          <div className="text-blue-600">Pos: ({position.x.toFixed(1)}%, {position.y.toFixed(1)}%)</div>
         </div>
       )}
       
       {/* Debug: Show coordinates on hover for small fields */}
       {!isSelected && expandedWidth < 10 && (
-        <div className="absolute top-0 right-0 opacity-0 hover:opacity-100 transition-opacity">
+        <div className="absolute top-0 right-0 opacity-0 hover:opacity-100 transition-opacity pointer-events-none">
           <div className="text-xs bg-black text-white px-1 rounded whitespace-nowrap">
-            {(field.bounding_box.x_min * 100).toFixed(1)},{(field.bounding_box.y_min * 100).toFixed(1)}
+            {(position.x).toFixed(1)},{(position.y).toFixed(1)}
           </div>
         </div>
       )}

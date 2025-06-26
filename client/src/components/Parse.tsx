@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { parseDocument } from '../api/parseApi';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { PdfViewer } from './PdfViewer';
 import OverlayBox from './OverlayBox';
 import type { ParseResponse, Field, FieldType } from '../types/api';
@@ -21,6 +20,7 @@ const Parse: React.FC = () => {
   const [pdfLoaded, setPdfLoaded] = useState(false);
   const [overlaysReady, setOverlaysReady] = useState(false);
   const [scrollPosition, setScrollPosition] = useState({ x: 0, y: 0 });
+  const [fieldPositions, setFieldPositions] = useState<Record<string, { x: number; y: number; width: number; height: number }>>({});
   const pdfViewerRef = useRef<HTMLDivElement>(null);
 
   const fieldTypeColors = {
@@ -35,6 +35,16 @@ const Parse: React.FC = () => {
 
   useEffect(() => {
     handleParse();
+  }, []);
+
+  // Handle position changes from draggable/resizable overlays
+  const handlePositionChange = useCallback((fieldId: string, newPosition: { x: number; y: number; width: number; height: number }) => {
+    setFieldPositions(prev => ({
+      ...prev,
+      [fieldId]: newPosition
+    }));
+    
+    console.log(`Field ${fieldId} moved to:`, newPosition);
   }, []);
 
   // Handle scroll events to update overlay positions
@@ -57,11 +67,16 @@ const Parse: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await parseDocument();
+      // Load the hardcoded normalized data instead of calling API
+      const response = await fetch('/i907_all_fields_normalized.json');
+      if (!response.ok) {
+        throw new Error('Failed to load normalized data');
+      }
+      const data = await response.json();
       setParseData(data);
       console.log('Parse data received:', data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to parse document');
+      setError(err instanceof Error ? err.message : 'Failed to load document data');
       console.error('Parse error:', err);
     } finally {
       setLoading(false);
@@ -193,7 +208,7 @@ const Parse: React.FC = () => {
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Parsing document with Google Document AI...</p>
+          <p className="text-gray-600">Loading document field data...</p>
         </div>
       </div>
     );
@@ -364,6 +379,7 @@ const Parse: React.FC = () => {
             ref={pdfViewerRef}
             fileUrl="/i-907_Jaz6iX6.pdf" 
             onLoadSuccess={handlePdfLoadSuccess}
+            scale={1.5}
           />
           
           {/* Debug: Corner markers for coordinate system verification */}
@@ -427,6 +443,7 @@ const Parse: React.FC = () => {
             className="absolute inset-0 pointer-events-none"
             style={{
               transform: `translate(-${scrollPosition.x}px, -${scrollPosition.y}px)`,
+              zIndex: 1000, // High z-index to be above PDF
             }}
           >
             {/* Page-specific Overlay containers */}
@@ -442,25 +459,24 @@ const Parse: React.FC = () => {
                 <div
                   key={`page-overlay-${pageNumber}`}
                   className="absolute pointer-events-none"
-                  style={{
-                    // Position the overlay container to match the actual PDF page position
-                    left: pagePosition.left + scrollPosition.x,
-                    top: pagePosition.top + scrollPosition.y,
-                    width: pagePosition.width,
-                    height: pagePosition.height,
-                    zIndex: 10,
-                    // Debug: add a subtle border to see the overlay container
-                    border: '2px dashed rgba(255, 0, 0, 0.3)',
-                  }}
+                                      style={{
+                      // Position the overlay container to match the actual PDF page position
+                      left: pagePosition.left + scrollPosition.x,
+                      top: pagePosition.top + scrollPosition.y,
+                      width: pagePosition.width,
+                      height: pagePosition.height,
+                      zIndex: 1001, // Above the main overlay container
+                    }}
                 >
                   {pageFields.map((field) => (
                     <div key={field.id} className="pointer-events-auto">
-                      <OverlayBox
-                        field={field}
-                        pageDimensions={pageDimensions}
-                        onClick={() => setSelectedField(field)}
-                        isSelected={selectedField?.id === field.id}
-                      />
+                                              <OverlayBox
+                          field={field}
+                          pageDimensions={pageDimensions}
+                          onClick={() => setSelectedField(field)}
+                          isSelected={selectedField?.id === field.id}
+                          onPositionChange={handlePositionChange}
+                        />
                     </div>
                   ))}
                 </div>
