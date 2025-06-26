@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { parseDocument } from '../api/parseApi';
 import { PdfViewer } from './PdfViewer';
 import OverlayBox from './OverlayBox';
@@ -18,6 +18,10 @@ const Parse: React.FC = () => {
     'signature_area',
     'static_text'
   ]));
+  const [pdfLoaded, setPdfLoaded] = useState(false);
+  const [overlaysReady, setOverlaysReady] = useState(false);
+  const [scrollPosition, setScrollPosition] = useState({ x: 0, y: 0 });
+  const pdfViewerRef = useRef<HTMLDivElement>(null);
 
   const fieldTypeColors = {
     form_field_label: { bg: 'bg-blue-100', border: 'border-blue-500', text: 'text-blue-800' },
@@ -33,6 +37,22 @@ const Parse: React.FC = () => {
     handleParse();
   }, []);
 
+  // Handle scroll events to update overlay positions
+  useEffect(() => {
+    const handleScroll = () => {
+      if (pdfViewerRef.current) {
+        const { scrollLeft, scrollTop } = pdfViewerRef.current;
+        setScrollPosition({ x: scrollLeft, y: scrollTop });
+      }
+    };
+
+    const pdfViewer = pdfViewerRef.current;
+    if (pdfViewer) {
+      pdfViewer.addEventListener('scroll', handleScroll);
+      return () => pdfViewer.removeEventListener('scroll', handleScroll);
+    }
+  }, [pdfLoaded]);
+
   const handleParse = async () => {
     setLoading(true);
     setError(null);
@@ -46,6 +66,85 @@ const Parse: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handlePdfLoadSuccess = (numPages: number, pageDimensions: { width: number; height: number }) => {
+    setPdfLoaded(true);
+    console.log('PDF loaded:', numPages, 'pages');
+    console.log('Rendered page dimensions:', pageDimensions);
+    
+    // Wait a bit for pages to render, then enable overlays
+    setTimeout(() => {
+      setOverlaysReady(true);
+      console.log('Overlays ready, checking page positions...');
+      
+      // Debug: log all page positions and sample field data
+      for (let i = 1; i <= numPages; i++) {
+        const position = getPageElementPosition(i);
+        console.log(`Page ${i} position:`, position);
+        
+        // Log some sample fields for this page
+        const pageFields = parseData?.fields.filter(f => f.page === i) || [];
+        console.log(`Page ${i} has ${pageFields.length} fields`);
+        
+        // Show first few fields as examples
+        pageFields.slice(0, 3).forEach((field, index) => {
+          const width = (field.bounding_box.x_max - field.bounding_box.x_min) * 100;
+          const height = (field.bounding_box.y_max - field.bounding_box.y_min) * 100;
+          console.log(`  Sample field ${index + 1}:`, {
+            text: field.text.substring(0, 50),
+            type: field.type,
+            size: `${width.toFixed(2)}% x ${height.toFixed(2)}%`,
+            position: `${(field.bounding_box.x_min * 100).toFixed(2)}%, ${(field.bounding_box.y_min * 100).toFixed(2)}%`
+          });
+        });
+      }
+    }, 500);
+  };
+
+  // Function to get the actual position and dimensions of a PDF page element
+  const getPageElementPosition = (pageNumber: number) => {
+    if (!pdfViewerRef.current) {
+      console.log('PDF viewer ref not available');
+      return null;
+    }
+    
+    // Look for the page container div first
+    const pageContainer = pdfViewerRef.current.querySelector(`[data-page-number="${pageNumber}"]`)?.parentElement;
+    if (pageContainer) {
+      const rect = pageContainer.getBoundingClientRect();
+      const containerRect = pdfViewerRef.current.getBoundingClientRect();
+      
+      const position = {
+        left: rect.left - containerRect.left,
+        top: rect.top - containerRect.top,
+        width: rect.width,
+        height: rect.height
+      };
+      console.log(`Page ${pageNumber} container position:`, position);
+      return position;
+    }
+    
+    // Fallback: try to find by class and index
+    const pageElements = pdfViewerRef.current.querySelectorAll('.react-pdf__Page');
+    console.log(`Found ${pageElements.length} page elements, looking for page ${pageNumber}`);
+    const targetPage = pageElements[pageNumber - 1];
+    if (targetPage) {
+      const rect = targetPage.getBoundingClientRect();
+      const containerRect = pdfViewerRef.current.getBoundingClientRect();
+      
+      const position = {
+        left: rect.left - containerRect.left,
+        top: rect.top - containerRect.top,
+        width: rect.width,
+        height: rect.height
+      };
+      console.log(`Page ${pageNumber} position:`, position);
+      return position;
+    }
+    
+    console.log(`Could not find page element for page ${pageNumber}`);
+    return null;
   };
 
   const toggleFieldType = (fieldType: FieldType) => {
@@ -67,6 +166,10 @@ const Parse: React.FC = () => {
     return parseData.fields.filter(field => visibleFieldTypes.has(field.type));
   };
 
+  const getFieldsByPage = (pageNumber: number) => {
+    return getVisibleFields().filter(field => field.page === pageNumber);
+  };
+
   const getFieldTypeLabel = (fieldType: FieldType) => {
     switch (fieldType) {
       case 'form_field_label': return 'Labels';
@@ -78,6 +181,11 @@ const Parse: React.FC = () => {
       case 'static_text': return 'Static Text';
       default: return fieldType;
     }
+  };
+
+  const getPageDimensions = (pageNumber: number) => {
+    if (!parseData?.document_info.page_dimensions) return null;
+    return parseData.document_info.page_dimensions.find(p => p.page === pageNumber);
   };
 
   if (loading) {
@@ -193,6 +301,12 @@ const Parse: React.FC = () => {
                 <span className="ml-2 text-gray-800">{selectedField.page}</span>
               </div>
               <div>
+                <span className="font-medium text-gray-600">Position:</span>
+                <span className="ml-2 text-gray-500 text-xs">
+                  ({selectedField.bounding_box.x_min.toFixed(3)}, {selectedField.bounding_box.y_min.toFixed(3)})
+                </span>
+              </div>
+              <div>
                 <span className="font-medium text-gray-600">ID:</span>
                 <span className="ml-2 text-gray-500 font-mono text-xs">{selectedField.id}</span>
               </div>
@@ -246,19 +360,112 @@ const Parse: React.FC = () => {
       {/* PDF Viewer */}
       <div className="flex-1 relative">
         <div className="relative w-full h-full">
-          <PdfViewer fileUrl="/i-907_Jaz6iX6.pdf" />
+          <PdfViewer 
+            ref={pdfViewerRef}
+            fileUrl="/i-907_Jaz6iX6.pdf" 
+            onLoadSuccess={handlePdfLoadSuccess}
+          />
           
-          {/* Overlay container */}
-          <div className="absolute inset-0 pointer-events-none">
-            {visibleFields.map((field) => (
-              <div key={field.id} className="pointer-events-auto">
-                <OverlayBox
-                  field={field}
-                  onClick={() => setSelectedField(field)}
-                  isSelected={selectedField?.id === field.id}
-                />
-              </div>
-            ))}
+          {/* Debug: Corner markers for coordinate system verification */}
+          <div 
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              transform: `translate(-${scrollPosition.x}px, -${scrollPosition.y}px)`,
+            }}
+          >
+            {overlaysReady && parseData && Array.from({ length: parseData.document_info.total_pages }, (_, index) => {
+              const pageNumber = index + 1;
+              const pagePosition = getPageElementPosition(pageNumber);
+              
+              if (!pagePosition) return null;
+              
+              return (
+                <div key={`debug-markers-${pageNumber}`}>
+                  {/* Top-left corner marker */}
+                  <div
+                    className="absolute w-4 h-4 bg-red-500 border-2 border-white shadow-lg z-50"
+                    style={{
+                      left: pagePosition.left + scrollPosition.x,
+                      top: pagePosition.top + scrollPosition.y,
+                    }}
+                    title={`Page ${pageNumber} - Top Left`}
+                  />
+                  {/* Top-right corner marker */}
+                  <div
+                    className="absolute w-4 h-4 bg-blue-500 border-2 border-white shadow-lg z-50"
+                    style={{
+                      left: pagePosition.left + pagePosition.width - 16 + scrollPosition.x,
+                      top: pagePosition.top + scrollPosition.y,
+                    }}
+                    title={`Page ${pageNumber} - Top Right`}
+                  />
+                  {/* Bottom-left corner marker */}
+                  <div
+                    className="absolute w-4 h-4 bg-green-500 border-2 border-white shadow-lg z-50"
+                    style={{
+                      left: pagePosition.left + scrollPosition.x,
+                      top: pagePosition.top + pagePosition.height - 16 + scrollPosition.y,
+                    }}
+                    title={`Page ${pageNumber} - Bottom Left`}
+                  />
+                  {/* Bottom-right corner marker */}
+                  <div
+                    className="absolute w-4 h-4 bg-yellow-500 border-2 border-white shadow-lg z-50"
+                    style={{
+                      left: pagePosition.left + pagePosition.width - 16 + scrollPosition.x,
+                      top: pagePosition.top + pagePosition.height - 16 + scrollPosition.y,
+                    }}
+                    title={`Page ${pageNumber} - Bottom Right`}
+                  />
+                </div>
+              );
+            })}
+          </div>
+          
+          {/* Overlay container that moves with scroll */}
+          <div 
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              transform: `translate(-${scrollPosition.x}px, -${scrollPosition.y}px)`,
+            }}
+          >
+            {/* Page-specific Overlay containers */}
+            {overlaysReady && parseData && Array.from({ length: parseData.document_info.total_pages }, (_, index) => {
+              const pageNumber = index + 1;
+              const pageFields = getFieldsByPage(pageNumber);
+              const pageDimensions = getPageDimensions(pageNumber);
+              const pagePosition = getPageElementPosition(pageNumber);
+              
+              if (pageFields.length === 0 || !pageDimensions || !pagePosition) return null;
+              
+              return (
+                <div
+                  key={`page-overlay-${pageNumber}`}
+                  className="absolute pointer-events-none"
+                  style={{
+                    // Position the overlay container to match the actual PDF page position
+                    left: pagePosition.left + scrollPosition.x,
+                    top: pagePosition.top + scrollPosition.y,
+                    width: pagePosition.width,
+                    height: pagePosition.height,
+                    zIndex: 10,
+                    // Debug: add a subtle border to see the overlay container
+                    border: '2px dashed rgba(255, 0, 0, 0.3)',
+                  }}
+                >
+                  {pageFields.map((field) => (
+                    <div key={field.id} className="pointer-events-auto">
+                      <OverlayBox
+                        field={field}
+                        pageDimensions={pageDimensions}
+                        onClick={() => setSelectedField(field)}
+                        isSelected={selectedField?.id === field.id}
+                      />
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>

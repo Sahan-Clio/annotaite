@@ -35,6 +35,7 @@ export const PdfViewer = forwardRef<HTMLDivElement, PdfViewerProps>(
             const rect = pageElement.getBoundingClientRect();
             const renderedDimensions = { width: rect.width, height: rect.height };
             console.log('Rendered page dimensions:', renderedDimensions);
+            console.log('Original page dimensions:', { width: page.width, height: page.height });
             setPageDimensions(renderedDimensions);
             onLoadSuccess?.(numPages || 1, renderedDimensions);
           } else {
@@ -56,43 +57,48 @@ export const PdfViewer = forwardRef<HTMLDivElement, PdfViewerProps>(
 
     return (
       <div ref={ref} className="w-full h-full overflow-auto bg-gray-100">
-        <Document
-          file={fileUrl}
-          onLoadSuccess={onDocumentLoadSuccess}
-          onLoadError={onDocumentLoadError}
-          options={options}
-          loading={
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-                <p className="text-muted-foreground">Loading PDF...</p>
+        <div className="flex flex-col items-center py-4 min-h-full">
+          <Document
+            file={fileUrl}
+            onLoadSuccess={onDocumentLoadSuccess}
+            onLoadError={onDocumentLoadError}
+            options={options}
+            loading={
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                  <p className="text-muted-foreground">Loading PDF...</p>
+                </div>
               </div>
-            </div>
-          }
-          error={
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center">
-                <p className="text-destructive mb-2">Failed to load PDF</p>
-                <p className="text-sm text-muted-foreground">
-                  Please check the PDF URL or try a different file
-                </p>
+            }
+            error={
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center">
+                  <p className="text-destructive mb-2">Failed to load PDF</p>
+                  <p className="text-sm text-muted-foreground">
+                    Please check the PDF URL or try a different file
+                  </p>
+                </div>
               </div>
-            </div>
-          }
-        >
-          {numPages && Array.from(new Array(numPages), (el, index) => (
-            <Page
-              key={`page_${index + 1}`}
-              pageNumber={index + 1}
-              scale={scale}
-              onLoadSuccess={onPageLoadSuccess}
-              onLoadError={(error) => console.warn(`Page ${index + 1} load error:`, error)}
-              className="mb-4 mx-auto shadow-lg"
-              renderTextLayer={true}
-              renderAnnotationLayer={true}
-            />
-          ))}
-        </Document>
+            }
+          >
+            {numPages && Array.from(new Array(numPages), (el, index) => (
+              <div key={`page-container-${index + 1}`} className="mb-4 relative">
+                <Page
+                  key={`page_${index + 1}`}
+                  pageNumber={index + 1}
+                  scale={scale}
+                  onLoadSuccess={onPageLoadSuccess}
+                  onLoadError={(error) => console.warn(`Page ${index + 1} load error:`, error)}
+                  className="shadow-lg border border-gray-300 bg-white"
+                  renderTextLayer={true}
+                  renderAnnotationLayer={true}
+                  data-page-number={index + 1}
+                />
+              </div>
+            ))}
+          </Document>
+        </div>
       </div>
     )
   }
