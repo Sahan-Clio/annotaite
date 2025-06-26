@@ -25,6 +25,26 @@ commands:
     command: |
       docker compose exec db mysql -u rails -ppassword annot_development
       
+  processor.start:
+    summary: "🔧 Run processor pipeline"
+    command: |
+      cd processor && dev start $$@
+      
+  processor.shell:
+    summary: "🐚 Open processor shell"
+    command: |
+      cd processor && dev shell
+      
+  processor.install:
+    summary: "📦 Build processor container"
+    command: |
+      cd processor && dev install
+      
+  processor.test:
+    summary: "🧪 Run processor tests"
+    command: |
+      cd processor && dev test
+      
   test:
     summary: "🧪 Run all tests across all services"
     command: |
@@ -34,4 +54,7 @@ commands:
       echo "🧪 Running client tests..."
       cd client && dev test
       echo "✅ Client tests completed"
+      echo "🧪 Running processor tests..."
+      cd processor && dev test
+      echo "✅ Processor tests completed"
       echo "🎉 All tests completed!" 

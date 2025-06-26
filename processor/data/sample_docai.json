@@ -1,0 +1,49 @@
+{
+  "pages": [
+    {
+      "pageNumber": 1,
+      "dimension": {
+        "width": 612,
+        "height": 792
+      }
+    }
+  ],
+  "entities": [
+    {
+      "type": "name_field",
+      "mentionText": "Family Name (Last Name):",
+      "boundingPoly": {
+        "vertices": [
+          {"x": 50, "y": 100},
+          {"x": 250, "y": 100},
+          {"x": 250, "y": 120},
+          {"x": 50, "y": 120}
+        ]
+      }
+    },
+    {
+      "type": "name_field", 
+      "mentionText": "Given Name (First Name):",
+      "boundingPoly": {
+        "vertices": [
+          {"x": 50, "y": 150},
+          {"x": 250, "y": 150},
+          {"x": 250, "y": 170},
+          {"x": 50, "y": 170}
+        ]
+      }
+    },
+    {
+      "type": "checkbox_field",
+      "mentionText": "Premium Processing Requested:",
+      "boundingPoly": {
+        "vertices": [
+          {"x": 50, "y": 200},
+          {"x": 300, "y": 200},
+          {"x": 300, "y": 220},
+          {"x": 50, "y": 220}
+        ]
+      }
+    }
+  ]
+} 

@@ -45,5 +45,15 @@ services:
     ports: [ "5173:5173" ]
     depends_on: [ api ]
 
+  processor:
+    build: ./processor
+    platform: linux/amd64
+    container_name: annot-processor
+    volumes:
+      - ./processor/src:/app/src
+      - ./uploads:/data/uploads
+    depends_on: [ api ]
+    command: ["sleep", "infinity"]
+
 volumes:
   db-data: 

@@ -1,0 +1,16 @@
+commands:
+  start: |
+    docker-compose exec processor \
+      python -m form_processor.main $$@
+  shell: |
+    docker-compose exec processor /bin/bash
+  install: |
+    docker-compose build processor
+  test: |
+    docker-compose exec processor pytest -v src/tests/
+  lint: |
+    docker-compose exec processor ruff check src/
+  lint.fix: |
+    docker-compose exec processor ruff check --fix src/
+  format: |
+    docker-compose exec processor black src/ 
