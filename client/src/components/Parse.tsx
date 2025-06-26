@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { parseDocument } from '../api/parseApi';
-import type { ParseResponse, FormField, MetadataItem } from '../types/api';
+import type { ParseResponse, FormField } from '../types/api';
 import { PdfViewer } from './PdfViewer';
 import OverlayBox from './OverlayBox';
 
@@ -88,21 +88,12 @@ const Parse: React.FC = () => {
   const overlayItems = useMemo(() => {
     if (!parseData) return [];
     
-    const fieldItems = parseData.fields.map(field => ({
+    return parseData.fields.map(field => ({
       id: `field-${field.name}`,
       label: field.name,
       type: 'field' as const,
       item: field
     }));
-    
-    const metadataItems = parseData.metadata.map((item, index) => ({
-      id: `metadata-${item.content.slice(0, 20)}`,
-      label: item.content.length > 30 ? `${item.content.slice(0, 30)}...` : item.content,
-      type: 'metadata' as const,
-      item: item
-    }));
-    
-    return [...fieldItems, ...metadataItems];
   }, [parseData]);
 
   if (!file) {
@@ -143,7 +134,7 @@ const Parse: React.FC = () => {
               <div className="text-sm text-muted-foreground">
                 {loading && 'Parsing document...'}
                 {error && `Error: ${error}`}
-                {parseData && `Found ${parseData.fields.length} fields, ${parseData.metadata.length} metadata items`}
+                {parseData && `Found ${parseData.fields.length} fields`}
               </div>
             </div>
           </div>
@@ -177,12 +168,11 @@ const Parse: React.FC = () => {
                     zIndex: 5,
                   }}
                 >
-                  {/* Form fields */}
+                  {/* All fields */}
                   {parseData.fields.map((field) => (
                     <OverlayBox
                       key={`field-${field.name}`}
                       item={field}
-                      isField={true}
                       bounds={{
                         width: scaledWidth,
                         height: scaledHeight,
@@ -190,22 +180,6 @@ const Parse: React.FC = () => {
                       onPositionChange={handlePositionChange}
                       onSizeChange={handleSizeChange}
                       isHighlighted={highlightedItem === `field-${field.name}`}
-                    />
-                  ))}
-                  
-                  {/* Metadata items */}
-                  {parseData.metadata.map((item, index) => (
-                    <OverlayBox
-                      key={`metadata-${item.content.slice(0, 20)}`}
-                      item={item}
-                      isField={false}
-                      bounds={{
-                        width: scaledWidth,
-                        height: scaledHeight,
-                      }}
-                      onPositionChange={handlePositionChange}
-                      onSizeChange={handleSizeChange}
-                      isHighlighted={highlightedItem === `metadata-${item.content.slice(0, 20)}`}
                     />
                   ))}
                 </div>
@@ -235,59 +209,28 @@ const Parse: React.FC = () => {
           
           <div className="overflow-y-auto max-h-full">
             {/* Fields section */}
-            {overlayItems.filter(item => item.type === 'field').length > 0 && (
+            {overlayItems.length > 0 && (
               <div className="p-4">
                 <h3 className="text-sm font-medium text-foreground mb-3 flex items-center">
                   <div className="w-3 h-3 bg-blue-500 rounded-full mr-2"></div>
-                  Form Fields ({overlayItems.filter(item => item.type === 'field').length})
+                  Fields ({overlayItems.length})
                 </h3>
                 <div className="space-y-2">
-                  {overlayItems
-                    .filter(item => item.type === 'field')
-                    .map((item) => (
-                      <div
-                        key={item.id}
-                        className="p-2 rounded border border-border hover:bg-accent hover:border-blue-500 cursor-pointer transition-all duration-200"
-                        onMouseEnter={() => setHighlightedItem(item.id)}
-                        onMouseLeave={() => setHighlightedItem(null)}
-                      >
-                        <div className="text-sm font-medium text-foreground truncate">
-                          {item.label}
-                        </div>
-                        <div className="text-xs text-muted-foreground mt-1">
-                          Field
-                        </div>
+                  {overlayItems.map((item) => (
+                    <div
+                      key={item.id}
+                      className="p-2 rounded border border-border hover:bg-accent hover:border-blue-500 cursor-pointer transition-all duration-200"
+                      onMouseEnter={() => setHighlightedItem(item.id)}
+                      onMouseLeave={() => setHighlightedItem(null)}
+                    >
+                      <div className="text-sm font-medium text-foreground truncate">
+                        {item.label}
                       </div>
-                    ))}
-                </div>
-              </div>
-            )}
-
-            {/* Metadata section */}
-            {overlayItems.filter(item => item.type === 'metadata').length > 0 && (
-              <div className="p-4 border-t">
-                <h3 className="text-sm font-medium text-foreground mb-3 flex items-center">
-                  <div className="w-3 h-3 bg-red-500 rounded-full mr-2"></div>
-                  Metadata ({overlayItems.filter(item => item.type === 'metadata').length})
-                </h3>
-                <div className="space-y-2">
-                  {overlayItems
-                    .filter(item => item.type === 'metadata')
-                    .map((item) => (
-                      <div
-                        key={item.id}
-                        className="p-2 rounded border border-border hover:bg-accent hover:border-red-500 cursor-pointer transition-all duration-200"
-                        onMouseEnter={() => setHighlightedItem(item.id)}
-                        onMouseLeave={() => setHighlightedItem(null)}
-                      >
-                        <div className="text-sm font-medium text-foreground truncate">
-                          {item.label}
-                        </div>
-                        <div className="text-xs text-muted-foreground mt-1">
-                          Metadata
-                        </div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        Field
                       </div>
-                    ))}
+                    </div>
+                  ))}
                 </div>
               </div>
             )}

@@ -35,6 +35,10 @@ class DocumentAiParserService
 
     # Process the document
     response = client.process_document(request)
+    
+    # Save raw Google API response for analysis
+    save_raw_response(response)
+    
     response.document
   end
 
@@ -42,13 +46,95 @@ class DocumentAiParserService
     "projects/#{@project_id}/locations/#{@location}/processors/#{@processor_id}"
   end
 
+  def save_raw_response(response)
+    # Convert the response to a hash for JSON serialization
+    raw_data = {
+      document: {
+        text: response.document.text,
+        pages: response.document.pages.map do |page|
+          {
+            page_number: page.page_number,
+            dimension: page.dimension ? {
+              width: page.dimension.width,
+              height: page.dimension.height
+            } : nil,
+            form_fields: page.form_fields.map do |field|
+              {
+                field_name: field.field_name ? {
+                  text_anchor: field.field_name.text_anchor ? {
+                    text_segments: field.field_name.text_anchor.text_segments.map do |segment|
+                      {
+                        start_index: segment.start_index,
+                        end_index: segment.end_index
+                      }
+                    end
+                  } : nil,
+                  bounding_poly: field.field_name.bounding_poly ? {
+                    vertices: field.field_name.bounding_poly.vertices.map do |vertex|
+                      { x: vertex.x, y: vertex.y }
+                    end
+                  } : nil
+                } : nil,
+                field_value: field.field_value ? {
+                  text_anchor: field.field_value.text_anchor ? {
+                    text_segments: field.field_value.text_anchor.text_segments.map do |segment|
+                      {
+                        start_index: segment.start_index,
+                        end_index: segment.end_index
+                      }
+                    end
+                  } : nil,
+                  bounding_poly: field.field_value.bounding_poly ? {
+                    vertices: field.field_value.bounding_poly.vertices.map do |vertex|
+                      { x: vertex.x, y: vertex.y }
+                    end
+                  } : nil
+                } : nil
+              }
+            end,
+            paragraphs: page.paragraphs.map do |paragraph|
+              {
+                layout: paragraph.layout ? {
+                  text_anchor: paragraph.layout.text_anchor ? {
+                    text_segments: paragraph.layout.text_anchor.text_segments.map do |segment|
+                      {
+                        start_index: segment.start_index,
+                        end_index: segment.end_index
+                      }
+                    end
+                  } : nil,
+                  bounding_poly: paragraph.layout.bounding_poly ? {
+                    vertices: paragraph.layout.bounding_poly.vertices.map do |vertex|
+                      { x: vertex.x, y: vertex.y }
+                    end
+                  } : nil
+                } : nil
+              }
+            end
+          }
+        end
+      }
+    }
+
+    # Save to JSON file
+    File.write(Rails.root.join('tmp', 'google_api_response.json'), JSON.pretty_generate(raw_data))
+    Rails.logger.info "Saved raw Google API response to tmp/google_api_response.json"
+  rescue => e
+    Rails.logger.error "Failed to save raw Google API response: #{e.message}"
+  end
+
   def extract_data(document)
-    fields = extract_form_fields(document)
-    metadata = extract_metadata(document)
+    # Combine form fields and metadata into a single fields array
+    form_fields = extract_form_fields(document)
+    metadata_fields = extract_metadata_as_fields(document)
+    
+    all_fields = (form_fields + metadata_fields).compact
+    
+    # Only include fields with bounding boxes
+    fields_with_boxes = all_fields.select { |field| field[:bounding_box] }
 
     {
-      fields: fields,
-      metadata: metadata
+      fields: fields_with_boxes
     }
   end
 
@@ -57,25 +143,35 @@ class DocumentAiParserService
     
     document.pages.each do |page|
       page.form_fields.each do |form_field|
+        # Extract field name (label)
         field_name = extract_text_from_anchor(document.text, form_field.field_name&.text_anchor)
-        
-        # Extract bounding boxes for label and input
         label_bbox = extract_bounding_box(form_field.field_name&.bounding_poly, page)
+        
+        if field_name&.strip.present? && label_bbox
+          fields << {
+            name: field_name.strip,
+            bounding_box: label_bbox
+          }
+        end
+        
+        # Extract field value if it has text and bounding box
+        field_value = extract_text_from_anchor(document.text, form_field.field_value&.text_anchor)
         input_bbox = extract_bounding_box(form_field.field_value&.bounding_poly, page)
-
-        fields << {
-          name: field_name&.strip,
-          label_bounding_box: label_bbox,
-          input_bounding_box: input_bbox
-        }
+        
+        if field_value&.strip.present? && input_bbox
+          fields << {
+            name: field_value.strip,
+            bounding_box: input_bbox
+          }
+        end
       end
     end
 
     fields
   end
 
-  def extract_metadata(document)
-    metadata = []
+  def extract_metadata_as_fields(document)
+    fields = []
     
     document.pages.each_with_index do |page, page_index|
       # Extract paragraphs that are not part of form fields
@@ -88,14 +184,16 @@ class DocumentAiParserService
 
         bbox = extract_bounding_box(paragraph.layout&.bounding_poly, page)
         
-        metadata << {
-          content: content.strip,
-          bounding_box: bbox
-        }
+        if bbox
+          fields << {
+            name: content.strip,
+            bounding_box: bbox
+          }
+        end
       end
     end
 
-    metadata
+    fields
   end
 
   def paragraph_is_form_field?(paragraph, page)

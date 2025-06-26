@@ -1,10 +1,9 @@
 import React from 'react';
 import { Rnd } from 'react-rnd';
-import type { FormField, MetadataItem } from '../types/api';
+import type { FormField } from '../types/api';
 
 interface OverlayBoxProps {
-  item: FormField | MetadataItem;
-  isField: boolean;
+  item: FormField;
   bounds: { width: number; height: number };
   onPositionChange: (id: string, x: number, y: number) => void;
   onSizeChange: (id: string, width: number, height: number) => void;
@@ -13,15 +12,12 @@ interface OverlayBoxProps {
 
 const OverlayBox: React.FC<OverlayBoxProps> = ({
   item,
-  isField,
   bounds,
   onPositionChange,
   onSizeChange,
   isHighlighted = false,
 }) => {
-  const boundingBox = isField 
-    ? (item as FormField).input_bounding_box 
-    : (item as MetadataItem).bounding_box;
+  const boundingBox = item.bounding_box;
 
   // Convert PDF coordinates to DOM coordinates
   const x = boundingBox.x_min * bounds.width;
@@ -29,12 +25,10 @@ const OverlayBox: React.FC<OverlayBoxProps> = ({
   const width = (boundingBox.x_max - boundingBox.x_min) * bounds.width;
   const height = (boundingBox.y_max - boundingBox.y_min) * bounds.height;
 
-  const label = isField ? (item as FormField).name : (item as MetadataItem).content;
+  const label = item.name;
 
   // Create unique ID for the item
-  const itemId = isField 
-    ? `field-${(item as FormField).name}` 
-    : `metadata-${(item as MetadataItem).content.slice(0, 20)}`;
+  const itemId = `field-${item.name}`;
 
   const handleDragStop = (e: any, data: any) => {
     console.log('Drag stopped for', itemId, 'new position:', data.x, data.y);
@@ -75,7 +69,7 @@ const OverlayBox: React.FC<OverlayBoxProps> = ({
         topLeft: {
           width: '6px',
           height: '6px',
-          backgroundColor: isField ? '#3b82f6' : '#ef4444',
+          backgroundColor: '#3b82f6',
           border: '1px solid white',
           borderRadius: '50%',
           position: 'absolute',
@@ -86,7 +80,7 @@ const OverlayBox: React.FC<OverlayBoxProps> = ({
         topRight: {
           width: '6px',
           height: '6px',
-          backgroundColor: isField ? '#3b82f6' : '#ef4444',
+          backgroundColor: '#3b82f6',
           border: '1px solid white',
           borderRadius: '50%',
           position: 'absolute',
@@ -97,7 +91,7 @@ const OverlayBox: React.FC<OverlayBoxProps> = ({
         bottomLeft: {
           width: '6px',
           height: '6px',
-          backgroundColor: isField ? '#3b82f6' : '#ef4444',
+          backgroundColor: '#3b82f6',
           border: '1px solid white',
           borderRadius: '50%',
           position: 'absolute',
@@ -108,7 +102,7 @@ const OverlayBox: React.FC<OverlayBoxProps> = ({
         bottomRight: {
           width: '6px',
           height: '6px',
-          backgroundColor: isField ? '#3b82f6' : '#ef4444',
+          backgroundColor: '#3b82f6',
           border: '1px solid white',
           borderRadius: '50%',
           position: 'absolute',
@@ -122,18 +116,14 @@ const OverlayBox: React.FC<OverlayBoxProps> = ({
         zIndex: 10,
       }}
       className={`
-        ${isField ? 'border-2 border-blue-500' : 'border-2 border-red-500'}
-        ${isField ? 'bg-blue-500/20' : 'bg-red-500/20'}
+        border-2 border-blue-500 bg-blue-500/20
         ${isHighlighted ? 'ring-4 ring-yellow-400 ring-opacity-75' : ''}
         transition-all duration-200
         cursor-move
       `}
     >
       <div className="absolute top-0 left-0 transform -translate-y-full pointer-events-none">
-        <span className={`
-          text-xs px-1 py-0.5 rounded text-white font-medium whitespace-nowrap
-          ${isField ? 'bg-blue-600' : 'bg-red-600'}
-        `}>
+        <span className="text-xs px-1 py-0.5 rounded text-white font-medium whitespace-nowrap bg-blue-600">
           {label}
         </span>
       </div>

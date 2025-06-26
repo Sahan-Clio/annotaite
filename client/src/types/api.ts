@@ -8,18 +8,11 @@ export interface BoundingBox {
 
 export interface FormField {
   name: string;
-  label_bounding_box: BoundingBox;
-  input_bounding_box: BoundingBox;
-}
-
-export interface MetadataItem {
-  content: string;
   bounding_box: BoundingBox;
 }
 
 export interface ParseResponse {
   fields: FormField[];
-  metadata: MetadataItem[];
 }
 
 export interface ApiError {

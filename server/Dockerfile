@@ -16,6 +16,9 @@ RUN bundle install
 
 COPY . .
 
+# Make the entrypoint script executable
+RUN chmod +x bin/docker-entrypoint
+
 EXPOSE 3001
 
-CMD ["sh", "-c", "bundle exec rails db:prepare && bundle exec rails s -p 3001 -b 0.0.0.0"]
+ENTRYPOINT ["./bin/docker-entrypoint"]

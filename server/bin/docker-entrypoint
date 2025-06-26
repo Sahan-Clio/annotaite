@@ -1,8 +1,24 @@
-#!/bin/bash -e
+#!/bin/bash
+set -e
 
-# If running the rails server then create or migrate existing database
-if [ "${1}" == "./bin/rails" ] && [ "${2}" == "server" ]; then
-  ./bin/rails db:prepare
+# Wait for database to be ready
+echo "Waiting for database to be ready..."
+until mysqladmin ping -h"$DB_HOST" -u"$DB_USER" -p"$DB_PASSWORD" --silent; do
+  echo "Database is unavailable - sleeping for 2 seconds"
+  sleep 2
+done
+
+echo "Database is ready!"
+
+# Remove any existing server.pid file
+if [ -f tmp/pids/server.pid ]; then
+  rm tmp/pids/server.pid
 fi
 
-exec "${@}"
+# Prepare the database (create, migrate, seed if needed)
+echo "Preparing database..."
+bundle exec rails db:prepare
+
+# Start the Rails server
+echo "Starting Rails server..."
+exec bundle exec rails server -p 3001 -b 0.0.0.0
