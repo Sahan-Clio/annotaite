@@ -49,11 +49,17 @@ services:
     build: ./processor
     platform: linux/amd64
     container_name: annot-processor
+    ports: [ "8000:8000" ]
     volumes:
       - ./processor/src:/app/src
       - ./uploads:/data/uploads
     depends_on: [ api ]
-    command: ["sleep", "infinity"]
+    environment:
+      - FLASK_ENV=development
+      - FLASK_DEBUG=1
+      - PYTHONPATH=/app/src
+    command: ["python", "-m", "form_processor.server"]
+    restart: unless-stopped
 
 volumes:
   db-data: 

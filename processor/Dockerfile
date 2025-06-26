@@ -21,4 +21,4 @@ COPY src/ ./src/
 ENV PYTHONPATH=/app/src
 
 # 4. Default command (makes the container usable ad-hoc)
-ENTRYPOINT ["python", "-m", "form_processor.main"] 
+CMD ["python", "-m", "form_processor.main", "--help"] 

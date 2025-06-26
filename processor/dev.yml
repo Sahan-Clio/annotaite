@@ -2,6 +2,9 @@ commands:
   start: |
     docker-compose exec processor \
       python -m form_processor.main $$@
+  server: |
+    docker-compose exec processor \
+      python -m form_processor.server
   shell: |
     docker-compose exec processor /bin/bash
   install: |

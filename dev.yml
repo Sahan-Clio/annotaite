@@ -30,6 +30,11 @@ commands:
     command: |
       cd processor && dev start $$@
       
+  processor.server:
+    summary: "🌐 Start processor HTTP server"
+    command: |
+      cd processor && dev server
+      
   processor.shell:
     summary: "🐚 Open processor shell"
     command: |

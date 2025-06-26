@@ -31,11 +31,15 @@ class Api::V1::DocumentParserController < ApplicationController
         Rails.logger.info "Created temp file: #{temp_file.path}, size: #{uploaded_content.size} bytes"
         Rails.logger.info "Original filename: #{uploaded_file.original_filename}"
         
-        # Initialize service with file path and original filename
+        # Initialize Document AI service with file path and original filename
         parser_service = DocumentAiParserService.new(temp_file.path, uploaded_file.original_filename)
       
-              # Parse the document
-        result = parser_service.parse
+        # Parse the document with Document AI
+        docai_result = parser_service.parse
+        
+        # Process form fields with the processor service
+        processor_service = FormFieldProcessorService.new(temp_file.path, docai_result, uploaded_file.original_filename)
+        result = processor_service.process
         
       ensure
         # Clean up temporary file
