@@ -1,12 +1,16 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { PdfViewer } from './PdfViewer';
 import OverlayBox from './OverlayBox';
+import { useParseDocument } from '../api/parseApi';
 import type { ParseResponse, Field, FieldType } from '../types/api';
 
 const Parse: React.FC = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const parseDocumentMutation = useParseDocument();
+  
   const [parseData, setParseData] = useState<ParseResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [selectedField, setSelectedField] = useState<Field | null>(null);
   const [visibleFieldTypes, setVisibleFieldTypes] = useState<Set<FieldType>>(new Set([
     'form_field_label',
@@ -21,7 +25,11 @@ const Parse: React.FC = () => {
   const [overlaysReady, setOverlaysReady] = useState(false);
   const [scrollPosition, setScrollPosition] = useState({ x: 0, y: 0 });
   const [fieldPositions, setFieldPositions] = useState<Record<string, { x: number; y: number; width: number; height: number }>>({});
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const pdfViewerRef = useRef<HTMLDivElement>(null);
+
+  // Get the uploaded file from navigation state
+  const uploadedFile = (location.state as any)?.file as File | undefined;
 
   const fieldTypeColors = {
     form_field_label: { bg: 'bg-blue-100', border: 'border-blue-500', text: 'text-blue-800' },
@@ -34,8 +42,26 @@ const Parse: React.FC = () => {
   };
 
   useEffect(() => {
+    // Redirect if no file was provided
+    if (!uploadedFile) {
+      navigate('/');
+      return;
+    }
+
+    // Create object URL for PDF display
+    const url = URL.createObjectURL(uploadedFile);
+    setPdfUrl(url);
+
+    // Parse the document
     handleParse();
-  }, []);
+
+    // Cleanup URL when component unmounts
+    return () => {
+      if (url) {
+        URL.revokeObjectURL(url);
+      }
+    };
+  }, [uploadedFile, navigate]);
 
   // Handle position changes from draggable/resizable overlays
   const handlePositionChange = useCallback((fieldId: string, newPosition: { x: number; y: number; width: number; height: number }) => {
@@ -64,22 +90,14 @@ const Parse: React.FC = () => {
   }, [pdfLoaded]);
 
   const handleParse = async () => {
-    setLoading(true);
-    setError(null);
+    if (!uploadedFile) return;
+
     try {
-      // Load the hardcoded normalized data instead of calling API
-      const response = await fetch('/i907_all_fields_normalized.json');
-      if (!response.ok) {
-        throw new Error('Failed to load normalized data');
-      }
-      const data = await response.json();
-      setParseData(data);
-      console.log('Parse data received:', data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load document data');
-      console.error('Parse error:', err);
-    } finally {
-      setLoading(false);
+      const result = await parseDocumentMutation.mutateAsync(uploadedFile);
+      setParseData(result);
+      console.log('Parse data received:', result);
+    } catch (error) {
+      console.error('Parse error:', error);
     }
   };
 
@@ -203,18 +221,21 @@ const Parse: React.FC = () => {
     return parseData.document_info.page_dimensions.find(p => p.page === pageNumber);
   };
 
-  if (loading) {
+  // Show loading state
+  if (parseDocumentMutation.isPending) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading document field data...</p>
+          <p className="text-gray-600">Parsing document...</p>
+          <p className="text-sm text-gray-500 mt-2">This may take a few moments</p>
         </div>
       </div>
     );
   }
 
-  if (error) {
+  // Show error state
+  if (parseDocumentMutation.isError) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center p-8 bg-red-50 rounded-lg max-w-md">
@@ -224,12 +245,37 @@ const Parse: React.FC = () => {
             </svg>
           </div>
           <h3 className="text-lg font-semibold text-red-800 mb-2">Parsing Failed</h3>
-          <p className="text-red-600 mb-4">{error}</p>
+          <p className="text-red-600 mb-4">{parseDocumentMutation.error?.message}</p>
+          <div className="space-x-4">
+            <button
+              onClick={() => handleParse()}
+              className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+            >
+              Try Again
+            </button>
+            <button
+              onClick={() => navigate('/')}
+              className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
+            >
+              Go Back
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show message if no PDF URL available
+  if (!pdfUrl) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <p className="text-gray-600 mb-4">No PDF file available</p>
           <button
-            onClick={handleParse}
-            className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+            onClick={() => navigate('/')}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
           >
-            Try Again
+            Go Back
           </button>
         </div>
       </div>
@@ -254,16 +300,27 @@ const Parse: React.FC = () => {
         <div className="p-4 border-b border-gray-200">
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-lg font-semibold text-gray-800">Document Analysis</h2>
-            <button
-              onClick={handleParse}
-              className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-            >
-              Refresh
-            </button>
+            <div className="flex space-x-2">
+              <button
+                onClick={handleParse}
+                disabled={parseDocumentMutation.isPending}
+                className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50"
+              >
+                {parseDocumentMutation.isPending ? 'Parsing...' : 'Refresh'}
+              </button>
+                             <button
+                 onClick={() => navigate('/')}
+                 className="px-3 py-1 text-sm bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
+               >
+                 Back
+               </button>
+            </div>
           </div>
           <div className="text-sm text-gray-600">
-            <p>{parseData.document_info.total_pages} pages • {parseData.fields.length} fields total</p>
-            <p>{visibleFields.length} fields visible</p>
+            <span className="font-medium">{uploadedFile?.name}</span>
+          </div>
+          <div className="text-sm text-gray-500">
+            Total: {parseData?.fields.length || 0} fields • {parseData?.document_info.total_pages || 0} pages
           </div>
         </div>
 
@@ -272,24 +329,21 @@ const Parse: React.FC = () => {
           <h3 className="text-sm font-semibold text-gray-700 mb-3">Field Types</h3>
           <div className="space-y-2">
             {Object.keys(fieldTypeColors).map((fieldType) => {
-              const typedFieldType = fieldType as FieldType;
-              const count = getFieldTypeCount(typedFieldType);
-              const colors = fieldTypeColors[typedFieldType];
-              const isVisible = visibleFieldTypes.has(typedFieldType);
+              const count = getFieldTypeCount(fieldType as FieldType);
+              const colors = fieldTypeColors[fieldType as FieldType];
+              const isVisible = visibleFieldTypes.has(fieldType as FieldType);
               
               return (
-                <label key={fieldType} className="flex items-center cursor-pointer group">
+                <label key={fieldType} className="flex items-center space-x-2 text-sm cursor-pointer">
                   <input
                     type="checkbox"
                     checked={isVisible}
-                    onChange={() => toggleFieldType(typedFieldType)}
-                    className="mr-3"
+                    onChange={() => toggleFieldType(fieldType as FieldType)}
+                    className="rounded border-gray-300"
                   />
-                  <div className={`w-4 h-4 rounded border-2 ${colors.border} ${colors.bg} mr-2`}></div>
-                  <span className="text-sm text-gray-700 group-hover:text-gray-900 flex-1">
-                    {getFieldTypeLabel(typedFieldType)}
+                  <span className={`px-2 py-1 rounded text-xs ${colors.bg} ${colors.text}`}>
+                    {getFieldTypeLabel(fieldType as FieldType)} ({count})
                   </span>
-                  <span className="text-xs text-gray-500 ml-2">({count})</span>
                 </label>
               );
             })}
@@ -377,7 +431,7 @@ const Parse: React.FC = () => {
         <div className="relative w-full h-full">
           <PdfViewer 
             ref={pdfViewerRef}
-            fileUrl="/i-907_Jaz6iX6.pdf" 
+            fileUrl={pdfUrl} 
             onLoadSuccess={handlePdfLoadSuccess}
             scale={1.5}
           />
@@ -459,24 +513,24 @@ const Parse: React.FC = () => {
                 <div
                   key={`page-overlay-${pageNumber}`}
                   className="absolute pointer-events-none"
-                                      style={{
-                      // Position the overlay container to match the actual PDF page position
-                      left: pagePosition.left + scrollPosition.x,
-                      top: pagePosition.top + scrollPosition.y,
-                      width: pagePosition.width,
-                      height: pagePosition.height,
-                      zIndex: 1001, // Above the main overlay container
-                    }}
+                  style={{
+                    // Position the overlay container to match the actual PDF page position
+                    left: pagePosition.left + scrollPosition.x,
+                    top: pagePosition.top + scrollPosition.y,
+                    width: pagePosition.width,
+                    height: pagePosition.height,
+                    zIndex: 1001, // Above the main overlay container
+                  }}
                 >
                   {pageFields.map((field) => (
                     <div key={field.id} className="pointer-events-auto">
-                                              <OverlayBox
-                          field={field}
-                          pageDimensions={pageDimensions}
-                          onClick={() => setSelectedField(field)}
-                          isSelected={selectedField?.id === field.id}
-                          onPositionChange={handlePositionChange}
-                        />
+                      <OverlayBox
+                        field={field}
+                        pageDimensions={pageDimensions}
+                        onClick={() => setSelectedField(field)}
+                        isSelected={selectedField?.id === field.id}
+                        onPositionChange={handlePositionChange}
+                      />
                     </div>
                   ))}
                 </div>

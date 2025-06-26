@@ -1,40 +1,73 @@
 require 'google/cloud/document_ai'
+require 'digest'
 
 require 'ostruct'
 
 class DocumentAiParserService
-  def initialize(file_path)
+  def initialize(file_path, original_filename = nil)
     @file_path = file_path
+    @original_filename = original_filename || File.basename(file_path)
     @client = Google::Cloud::DocumentAI.document_processor_service
     @project_id = ENV['GOOGLE_CLOUD_PROJECT_ID'] || 'your-project-id'
     @location = ENV['GOOGLE_CLOUD_LOCATION'] || 'us'
     @processor_id = ENV['GOOGLE_CLOUD_PROCESSOR_ID'] || 'your-processor-id'
+    @cache_dir = Rails.root.join('cache')
   end
 
   def parse
-    # Use saved Google API response instead of making live API call
-    document = load_saved_google_response
+    # Ensure cache directory exists
+    FileUtils.mkdir_p(@cache_dir)
+    
+    # Generate cache key based on filename and file content hash
+    cache_key = generate_cache_key
+    cache_file_path = @cache_dir.join("#{cache_key}.json")
+    
+    # Check if cached response exists
+    if File.exist?(cache_file_path)
+      Rails.logger.info "Using cached response for #{@original_filename}"
+      document = load_cached_response(cache_file_path)
+    else
+      Rails.logger.info "Making Google Document AI API call for #{@original_filename}"
+      document = process_document
+      save_to_cache(document, cache_file_path)
+    end
+    
     extract_data(document)
   end
 
   private
 
-  def load_saved_google_response
-    # Load the saved Google API response from the Rails root directory
-    response_path = Rails.root.join('google_api_raw_response.json')
-    
-    unless File.exist?(response_path)
-      raise "Google API response file not found at #{response_path}. Please ensure the file exists in the project root."
-    end
+  def generate_cache_key
+    # Create a unique cache key based on filename and file content
+    file_content = File.binread(@file_path)
+    content_hash = Digest::SHA256.hexdigest(file_content)
+    filename_safe = @original_filename.gsub(/[^a-zA-Z0-9._-]/, '_')
+    "#{filename_safe}_#{content_hash[0..16]}"
+  end
 
-    raw_data = JSON.parse(File.read(response_path))
+  def load_cached_response(cache_file_path)
+    raw_data = JSON.parse(File.read(cache_file_path))
     
-    # Extract the document part from the Google API response
-    # The structure is { "document": { ... } }
-    document_data = raw_data['document'] || raw_data[:document]
+    # Handle both direct document data and wrapped responses
+    document_data = if raw_data.key?('document')
+                      raw_data['document']
+                    else
+                      raw_data
+                    end
     
-    # Convert the hash to an OpenStruct for easier access
-    OpenStruct.new(document_data)
+    # Create a proper document-like object
+    create_document_struct(document_data)
+  end
+
+  def save_to_cache(document, cache_file_path)
+    Rails.logger.info "Saving response to cache: #{cache_file_path}"
+    # Save the full document structure for caching
+    cache_data = {
+      document: document.to_h,
+      cached_at: Time.current.iso8601,
+      original_filename: @original_filename
+    }
+    File.write(cache_file_path, JSON.pretty_generate(cache_data))
   end
 
   def process_document
@@ -59,8 +92,9 @@ class DocumentAiParserService
     response.document
   end
 
-  def save_raw_response(document)
-    File.write('google_api_raw_response.json', JSON.pretty_generate(document.to_h))
+  def create_document_struct(document_data)
+    # Create a struct-like object that behaves like the Google API response
+    OpenStruct.new(document_data.deep_symbolize_keys)
   end
 
   def extract_data(document_data)
@@ -157,62 +191,45 @@ class DocumentAiParserService
   end
 
   def extract_document_info(document_data)
-    pages = document_data.pages || []
-    page_dimensions = pages.map.with_index do |page, index|
-      dimension = page['dimension'] || page[:dimension]
-      {
-        page: page['page_number'] || page[:page_number] || (index + 1),
-        width: dimension ? (dimension['width'] || dimension[:width]) : 1758.0,
-        height: dimension ? (dimension['height'] || dimension[:height]) : 2275.0
-      }
+    pages_info = []
+    total_pages = 0
+
+    if document_data.pages
+      document_data.pages.each do |page|
+        page_number = page['page_number'] || page[:page_number] || (total_pages + 1)
+        dimension = page['dimension'] || page[:dimension] || {}
+        
+        pages_info << {
+          page: page_number,
+          width: dimension['width'] || dimension[:width] || 0,
+          height: dimension['height'] || dimension[:height] || 0
+        }
+        total_pages = [total_pages, page_number].max
+      end
     end
 
     {
-      total_pages: pages.length,
-      page_dimensions: page_dimensions
+      total_pages: total_pages,
+      page_dimensions: pages_info
     }
   end
 
   def classify_field_type(text, context)
-    # Clean text for analysis
     clean_text = text.strip.downcase
-
-    # Form field labels (end with colon or contain typical label words)
-    if context == :form_field_name || text.end_with?(':') || 
-       clean_text.match?(/\b(name|address|number|date|phone|email|city|state|zip)\b/)
+    
+    # Form field classification
+    if context == :form_field_name
       return 'form_field_label'
-    end
-
-    # Form field inputs (typically short or empty from form_field_value context)
-    if context == :form_field_value
+    elsif context == :form_field_value
       return 'form_field_input'
     end
 
-    # Section headers (Part X., numbered sections)
-    if clean_text.match?(/^part \d+\./) || clean_text.match?(/^section \d+/) ||
-       clean_text.match?(/^item \d+/) || clean_text.match?(/^\d+\.\s*[a-z]/)
-      return 'section_header'
-    end
-
-    # Instructions (contain instruction keywords)
-    if clean_text.match?(/\b(type|print|complete|select|check|mark|sign|attach|submit|read|provide)\b/) &&
-       clean_text.length > 20
-      return 'instruction_text'
-    end
-
-    # Checkbox indicators
-    if clean_text.match?(/^\s*☐\s*/) || clean_text.match?(/^\s*□\s*/) || 
-       clean_text == 'yes' || clean_text == 'no'
-      return 'checkbox'
-    end
-
-    # Signature areas
-    if clean_text.match?(/signature/) || clean_text.match?(/sign here/) ||
-       clean_text.match?(/date of signature/)
-      return 'signature_area'
-    end
-
-    # Default to static text
+    # Content-based classification for paragraphs
+    return 'section_header' if clean_text.length < 100 && clean_text.match?(/\b(part|section|\d+\.|\w+:)\b/)
+    return 'instruction_text' if clean_text.match?(/\b(instructions?|note|warning|important)\b/)
+    return 'checkbox' if clean_text.match?(/\b(yes|no|check|select)\b/) && clean_text.length < 50
+    return 'signature_area' if clean_text.match?(/\b(signature|sign|date)\b/)
+    
     'static_text'
   end
 
@@ -276,55 +293,72 @@ class DocumentAiParserService
 
   def extract_bounding_box(bounding_poly, page_dimension, page_number)
     return nil unless bounding_poly && bounding_poly['vertices']&.any?
+    return nil unless page_dimension
 
     vertices = bounding_poly['vertices']
-    x_coords = vertices.map { |v| v['x'] || v[:x] }
-    y_coords = vertices.map { |v| v['y'] || v[:y] }
+    page_width = page_dimension['width'] || page_dimension[:width] || 1
+    page_height = page_dimension['height'] || page_dimension[:height] || 1
 
-    width = page_dimension ? (page_dimension['width'] || page_dimension[:width]) : 1758.0
-    height = page_dimension ? (page_dimension['height'] || page_dimension[:height]) : 2275.0
+    # Extract coordinates from vertices
+    x_coords = vertices.map { |v| (v['x'] || v[:x] || 0).to_f }.select { |x| x >= 0 }
+    y_coords = vertices.map { |v| (v['y'] || v[:y] || 0).to_f }.select { |y| y >= 0 }
 
+    return nil if x_coords.empty? || y_coords.empty?
+
+    # Calculate normalized bounding box (0.0 to 1.0)
     {
-      page: page_number,
-      x_min: x_coords.min.to_f / width,
-      y_min: y_coords.min.to_f / height,
-      x_max: x_coords.max.to_f / width,
-      y_max: y_coords.max.to_f / height
+      x_min: x_coords.min / page_width.to_f,
+      y_min: y_coords.min / page_height.to_f,
+      x_max: x_coords.max / page_width.to_f,
+      y_max: y_coords.max / page_height.to_f
     }
   end
 
-  def extract_text_from_anchor(document_text, text_anchor)
-    return '' unless text_anchor && text_anchor['text_segments']&.any?
+  def extract_text_from_anchor(full_text, text_anchor)
+    return '' unless text_anchor && text_anchor['text_segments']
 
-    text_segments = text_anchor['text_segments']
-    text_segments.map do |segment|
-      start_idx = segment['start_index'] || segment[:start_index] || 0
-      end_idx = segment['end_index'] || segment[:end_index] || document_text.length
-      document_text[start_idx...end_idx]
-    end.join('')
+    result = ''
+    text_anchor['text_segments'].each do |segment|
+      start_index = segment['start_index'] || segment[:start_index] || 0
+      end_index = segment['end_index'] || segment[:end_index] || full_text.length
+      
+      # Ensure indices are within bounds
+      start_index = [start_index, 0].max
+      end_index = [end_index, full_text.length].min
+      
+      if start_index < end_index && start_index < full_text.length
+        result += full_text[start_index...end_index]
+      end
+    end
+    result
   end
 
   def deduplicate_fields(fields)
-    # Group fields by text and approximate position
-    grouped_fields = fields.group_by do |field|
-      [
-        field[:text],
-        field[:page],
-        (field[:bounding_box][:x_min] * 100).round,
-        (field[:bounding_box][:y_min] * 100).round
-      ]
+    unique_fields = []
+    
+    fields.each do |field|
+      # Check if a similar field already exists
+      duplicate = unique_fields.find do |existing|
+        text_similar = existing[:text].strip == field[:text].strip
+        same_page = existing[:page] == field[:page]
+        position_similar = positions_similar?(existing[:bounding_box], field[:bounding_box])
+        
+        text_similar && same_page && position_similar
+      end
+      
+      unless duplicate
+        unique_fields << field
+      end
     end
+    
+    unique_fields
+  end
 
-    # Keep only one field per group, preferring form_field types
-    grouped_fields.map do |_, group|
-      # Prefer form field types over paragraph types
-      group.sort_by do |field|
-        case field[:type]
-        when 'form_field_label', 'form_field_input' then 0
-        when 'section_header', 'signature_area' then 1
-        else 2
-        end
-      end.first
+  def positions_similar?(box1, box2, threshold = 0.01)
+    return false unless box1 && box2
+    
+    [:x_min, :y_min, :x_max, :y_max].all? do |coord|
+      (box1[coord] - box2[coord]).abs < threshold
     end
   end
 end 

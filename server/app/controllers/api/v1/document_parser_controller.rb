@@ -1,22 +1,39 @@
 class Api::V1::DocumentParserController < ApplicationController
   def parse
     begin
-      # Use the hardcoded PDF file path for now
-      pdf_path = Rails.root.join('data', 'forms', 'i-907_Jaz6iX6.pdf')
-      
-      # Check if file exists
-      unless File.exist?(pdf_path)
+      # Check if file was uploaded
+      unless params[:file].present?
         return render json: { 
-          error: 'PDF file not found',
-          details: "File not found at: #{pdf_path}"
-        }, status: :not_found
+          error: 'No file uploaded',
+          details: 'Please upload a PDF file'
+        }, status: :bad_request
       end
 
-      # Initialize service with file path
-      parser_service = DocumentAiParserService.new(pdf_path)
+      uploaded_file = params[:file]
+
+      # Validate file type
+      unless uploaded_file.content_type == 'application/pdf'
+        return render json: { 
+          error: 'Invalid file type',
+          details: 'Only PDF files are supported'
+        }, status: :bad_request
+      end
+
+      # Create temporary file
+      temp_file = Tempfile.new(['uploaded', '.pdf'])
+      temp_file.binmode
+      temp_file.write(uploaded_file.read)
+      temp_file.rewind
+
+      # Initialize service with file path and original filename
+      parser_service = DocumentAiParserService.new(temp_file.path, uploaded_file.original_filename)
       
       # Parse the document
       result = parser_service.parse
+      
+      # Clean up temporary file
+      temp_file.close
+      temp_file.unlink
       
       # Return the enhanced structure
       render json: result, status: :ok
