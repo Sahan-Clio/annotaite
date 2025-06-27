@@ -1,0 +1,22 @@
+# Modern document processing with Unstructured
+unstructured[pdf]==0.18.1
+
+# Core dependencies for visual field marking
+pdf2image==1.16.3
+pillow==10.0.1
+numpy==1.24.3
+opencv-python==4.8.1.78
+PyPDF2==3.0.1
+
+# Web server
+flask==2.3.3
+werkzeug==2.3.7
+
+pytesseract==0.3.10
+layoutparser==0.3.4
+boxdetect==1.0.2
+click==8.1.7
+rich==13.7.1
+pytest==8.1.1
+black==24.3.0
+ruff==0.3.4 

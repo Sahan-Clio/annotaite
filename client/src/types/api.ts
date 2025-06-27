@@ -12,8 +12,21 @@ export interface FormField {
 }
 
 export interface ParseResponse {
-  document_info: DocumentInfo;
-  fields: Field[];
+  success: boolean;
+  fields: ProcessedField[];
+  total_fields: number;
+  page: number;
+  pdf_filename: string;
+  error?: string;
+}
+
+export interface ProcessedField {
+  name: string;
+  type: 'text_field' | 'checkbox' | 'signature' | 'date' | 'other';
+  bbox: BoundingBox;
+  confidence: number;
+  label?: string;
+  value?: string | boolean;
 }
 
 export interface DocumentInfo {
