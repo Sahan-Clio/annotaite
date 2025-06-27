@@ -218,50 +218,53 @@ const OverlayBox: React.FC<OverlayBoxProps> = ({
     }
   }, [isDragging, isResizing, handleMouseMove, handleMouseUp]);
 
-  // Get custom font size for overlays - improved for zoom
-  const getCustomFontSize = () => {
-    if (expandedWidth > 15 && expandedHeight > 3) return '12px';
-    if (expandedWidth > 10 && expandedHeight > 2) return '10px';
-    if (expandedWidth > 6 && expandedHeight > 1.5) return '8px';
-    if (expandedWidth > 3 && expandedHeight > 1) return '7px';
-    if (expandedWidth > 1.5 && expandedHeight > 0.7) return '6px';
+  // Get dynamic font size based on overlay dimensions
+  const getDynamicFontSize = () => {
+    // Base font size calculation on both width and height
+    const area = expandedWidth * expandedHeight;
+    const minDimension = Math.min(expandedWidth, expandedHeight);
+    
+    // Balanced font sizes - in between original and larger
+    if (area > 300 && minDimension > 10) return '15px';
+    if (area > 200 && minDimension > 8) return '13px';
+    if (area > 100 && minDimension > 6) return '11px';
+    if (area > 50 && minDimension > 4) return '10px';
+    if (area > 30 && minDimension > 3) return '9px';
+    if (area > 20 && minDimension > 2) return '8px';
+    if (area > 12 && minDimension > 1.5) return '7px';
+    if (area > 6 && minDimension > 1) return '6px';
+    
+    // Very small overlays
     return '5px';
   };
 
-  // Calculate how much text can fit in a single line - improved for zoom
+  // Calculate line height based on font size
+  const getLineHeight = () => {
+    const fontSize = getDynamicFontSize();
+    const sizeValue = parseInt(fontSize);
+    
+    // Tighter line height for better text fitting
+    if (sizeValue >= 12) return '1.2';
+    if (sizeValue >= 8) return '1.1';
+    return '1.0';
+  };
+
+  // Get text that fits within the overlay dimensions
   const getDisplayText = () => {
     const text = field.text.trim();
     
-    let maxChars;
-    
-    // Better character estimation with zoom factor
-    if (expandedWidth > 20) {
-      maxChars = Math.floor(expandedWidth * 2.2);
-    } else if (expandedWidth > 12) {
-      maxChars = Math.floor(expandedWidth * 2.0);
-    } else if (expandedWidth > 6) {
-      maxChars = Math.floor(expandedWidth * 1.8);
-    } else if (expandedWidth > 3) {
-      maxChars = Math.floor(expandedWidth * 1.5);
-    } else if (expandedWidth > 1.5) {
-      maxChars = Math.floor(expandedWidth * 1.2);
-    } else {
-      maxChars = 2;
-    }
-    
-    maxChars = Math.max(2, maxChars);
-    
-    if (text.length <= maxChars) {
-      return text;
-    }
-    
-    if (maxChars > 4) {
-      return `${text.substring(0, maxChars - 3)}...`;
-    } else if (maxChars > 2) {
-      return `${text.substring(0, maxChars - 1)}…`;
-    } else {
+    // For very small overlays, show abbreviated text
+    if (expandedWidth < 2 || expandedHeight < 1) {
       return text.substring(0, 2);
     }
+    
+    // For small overlays, limit text length but allow wrapping
+    if (expandedWidth < 4 && expandedHeight < 2) {
+      return text.length > 10 ? text.substring(0, 8) + '...' : text;
+    }
+    
+    // For medium and large overlays, show full text
+    return text;
   };
 
   const style = {
@@ -296,20 +299,31 @@ const OverlayBox: React.FC<OverlayBoxProps> = ({
         </div>
       )}
       
-      {/* Field content - single line only */}
+      {/* Field content - multi-line responsive text */}
       <div 
         className={`w-full h-full flex items-center justify-center text-gray-800 text-center drag-handle`}
         style={{
-          fontSize: getCustomFontSize(),
-          padding: '0.5px',
-          lineHeight: '1',
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
+          fontSize: getDynamicFontSize(),
+          lineHeight: getLineHeight(),
+          padding: '0px',
           fontWeight: '500',
+          wordWrap: 'break-word',
+          wordBreak: 'break-word',
+          hyphens: 'auto',
+          overflow: 'hidden',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
         }}
       >
-        {getDisplayText()}
+        <span style={{ 
+          maxWidth: '100%', 
+          maxHeight: '100%',
+          overflow: 'hidden',
+          textAlign: 'center',
+        }}>
+          {getDisplayText()}
+        </span>
       </div>
       
       {/* Resize handle - only show when selected */}
