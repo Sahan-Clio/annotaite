@@ -1,24 +1,6 @@
-require 'gemini-ai'
-
 class GeminiAiService
   def initialize
-    @api_key = ENV['GEMINI_API_KEY']
-    raise 'GEMINI_API_KEY environment variable is not set' if @api_key.blank?
-    
-    @client = Gemini.new(
-      credentials: {
-        service: 'generative-language-api',
-        api_key: @api_key
-      },
-      options: { 
-        model: 'gemini-2.5-pro',
-        server_sent_events: false,
-        timeout: nil,
-        open_timeout: nil,
-        read_timeout: nil,
-        write_timeout: nil
-      }
-    )
+    @gemini_client = GeminiClient.new
   end
 
   def enhance_form_fields_single_call(processor_output)
@@ -31,116 +13,28 @@ class GeminiAiService
       raise 'Invalid processor output: missing or invalid fields array'
     end
     
-    prompt = load_prompt
-    
-    # Use the proper simplify_field_data method
-    simplified_fields = simplify_field_data(processor_output['fields'])
+    # Prepare data for AI analysis
+    simplified_fields = AssociationPrompter.simplify_field_data(processor_output['fields'])
+    prompt_text = AssociationPrompter.build_prompt_with_data(simplified_fields)
     
     Rails.logger.info "Sending #{simplified_fields.size} fields to Gemini AI for association analysis"
     
-    # Save request data for debugging (send only the simplified fields array)
+    # Save request data for debugging
     save_debug_data(simplified_fields, 'request', start_time)
     
     begin
-      # Make the API call using the gem
-      api_start_time = Time.current
-      Rails.logger.info "Making Gemini API association call at #{api_start_time}"
+      # Make the API call
+      response = @gemini_client.generate_content(prompt_text)
       
-      result = @client.generate_content({
-        contents: {
-          role: 'user',
-          parts: {
-            text: "#{prompt}\n\nHere is the form field data to analyze for label-input associations:\n\n#{simplified_fields.to_json}"
-          }
-        },
-        generationConfig: {
-          temperature: 0.1,
-          topK: 1,
-          topP: 0.8
-        },
-        safetySettings: [
-          {
-            category: "HARM_CATEGORY_HARASSMENT",
-            threshold: "BLOCK_ONLY_HIGH"
-          },
-          {
-            category: "HARM_CATEGORY_HATE_SPEECH", 
-            threshold: "BLOCK_ONLY_HIGH"
-          },
-          {
-            category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-            threshold: "BLOCK_ONLY_HIGH"
-          },
-          {
-            category: "HARM_CATEGORY_DANGEROUS_CONTENT",
-            threshold: "BLOCK_ONLY_HIGH"
-          }
-        ]
-      })
-      
-      api_end_time = Time.current
-      api_duration = ((api_end_time - api_start_time) * 1000).round(2)
-      Rails.logger.info "Gemini API association call completed in #{api_duration}ms"
-
       # Save response data for debugging
-      save_debug_data(result, 'response', api_end_time, api_duration)
+      save_debug_data(response[:result], 'response', Time.current, response[:duration_ms])
       
       # Parse the response to get association tuples
-      association_tuples = parse_gemini_association_response(result)
+      association_tuples = AssociationParser.parse_gemini_association_response(response[:result])
       
       # Create field associations from the tuples
       if association_tuples.is_a?(Array) && association_tuples.all? { |tuple| tuple.is_a?(Array) && tuple.length == 2 }
-        original_fields = processor_output['fields']
-        field_associations = []
-        used_field_ids = Set.new
-        
-        association_tuples.each_with_index do |tuple, index|
-          label_id, input_id = tuple
-          
-          # Convert back to 0-based index
-          label_index = label_id - 1
-          input_index = input_id - 1
-          
-          if label_index >= 0 && label_index < original_fields.length &&
-             input_index >= 0 && input_index < original_fields.length
-            
-            label_field = original_fields[label_index]
-            input_field = original_fields[input_index]
-            
-            # Validate the association using the same type determination logic
-            label_type = determine_field_type(label_field)
-            input_type = determine_field_type(input_field)
-            
-            # Debug log for first few associations
-            if index < 3
-              Rails.logger.info "Association #{index}: label_field[#{label_index}] type='#{label_field['type']}' -> #{label_type}, input_field[#{input_index}] type='#{input_field['type']}' -> #{input_type}"
-            end
-            
-            if label_type == 0 && (input_type == 1 || input_type == 2)
-              association = {
-                'id' => "assoc_#{index + 1}",
-                'label' => {
-                  'id' => label_field['id'] || "field_#{label_index + 1}",
-                  'text' => label_field['text'] || '',
-                  'bounding_box' => label_field['bounding_box']
-                },
-                'input' => {
-                  'id' => input_field['id'] || "field_#{input_index + 1}",
-                  'type' => input_type == 1 ? 'text_input' : 'checkbox',
-                  'bounding_box' => input_field['bounding_box'],
-                  'text' => input_field['text']
-                },
-                'page' => label_field['page'] || input_field['page'] || 1
-              }
-              
-              field_associations << association
-              used_field_ids.add(label_field['id'] || "field_#{label_index + 1}")
-              used_field_ids.add(input_field['id'] || "field_#{input_index + 1}")
-            end
-          end
-        end
-        
-        Rails.logger.info "Created #{field_associations.length} field associations from #{association_tuples.length} tuples"
+        field_associations = AssociationParser.create_field_associations(association_tuples, processor_output['fields'])
         
         # Return the processor output with field associations
         enhanced_result = processor_output.dup
@@ -148,7 +42,7 @@ class GeminiAiService
         enhanced_result['processing_info'] = {
           'gemini_enhancement_attempted' => true,
           'gemini_enhancement_successful' => true,
-          'original_field_count' => original_fields.length,
+          'original_field_count' => processor_output['fields'].length,
           'associations_count' => field_associations.length,
           'association_tuples' => association_tuples
         }
@@ -189,139 +83,10 @@ class GeminiAiService
     end
   end
 
-  def enhance_form_fields(processor_output)
-    start_time = Time.current
-    Rails.logger.info "Starting Gemini AI page-by-page enhancement at #{start_time}"
-    
-    # Validate processor output structure
-    unless processor_output.is_a?(Hash) && processor_output['fields'].is_a?(Array)
-      Rails.logger.error "Invalid processor output structure: #{processor_output.class}"
-      raise 'Invalid processor output: missing or invalid fields array'
-    end
-    
-    # Group fields by page
-    fields_by_page = group_fields_by_page(processor_output['fields'])
-    Rails.logger.info "Processing #{fields_by_page.keys.size} pages with Gemini AI"
-    
-    # Process each page separately
-    all_enhanced_fields = []
-    total_api_time = 0
-    
-    fields_by_page.each do |page_num, page_fields|
-      page_start_time = Time.current
-      Rails.logger.info "Processing page #{page_num} with #{page_fields.size} fields"
-      
-      # Simplify fields for this page
-      simplified_fields = page_fields.map do |field|
-        {
-          id: field['id'],
-          type: field['type'],
-          text: field['text'],
-          page: field['page'],
-          bounding_box: field['bounding_box']
-        }
-      end
-      
-      page_data = { 'fields' => simplified_fields, 'page' => page_num }
-      
-      begin
-        prompt = load_prompt
-        
-        # Make API call for this page
-        api_start_time = Time.current
-        
-        result = @client.generate_content({
-          contents: {
-            role: 'user',
-            parts: {
-              text: "#{prompt}\n\nHere is the form field data for page #{page_num} to analyze:\n\n#{page_data.to_json}"
-            }
-          },
-          generationConfig: {
-            temperature: 0.1,
-            topK: 1,
-            topP: 0.8
-          }
-        })
-        
-        api_end_time = Time.current
-        api_duration = ((api_end_time - api_start_time) * 1000).round(2)
-        total_api_time += api_duration
-        
-        Rails.logger.info "Gemini API call for page #{page_num} completed in #{api_duration}ms"
-        
-        # Parse response for this page
-        page_enhanced_fields = parse_page_response(result, page_fields)
-        all_enhanced_fields.concat(page_enhanced_fields)
-        
-        page_duration = ((Time.current - page_start_time) * 1000).round(2)
-        Rails.logger.info "Page #{page_num} processed in #{page_duration}ms"
-        
-      rescue StandardError => e
-        Rails.logger.error "Failed to process page #{page_num}: #{e.message}"
-        # Add original fields if processing fails
-        all_enhanced_fields.concat(page_fields)
-      end
-    end
-    
-    # Return enhanced output
-    enhanced_output = processor_output.dup
-    enhanced_output['fields'] = all_enhanced_fields
-    enhanced_output['processing_info'] = {
-      'gemini_enhancement_attempted' => true,
-      'gemini_enhancement_successful' => true,
-      'pages_processed' => fields_by_page.keys.size,
-      'total_api_time_ms' => total_api_time,
-      'total_processing_time_ms' => ((Time.current - start_time) * 1000).round(2)
-    }
-    
-    Rails.logger.info "All pages processed. Total API time: #{total_api_time}ms"
-    enhanced_output
-  end
+
 
   def test_simple_request
-    start_time = Time.current
-    Rails.logger.info "Testing simple Gemini request at #{start_time}"
-    
-    begin
-      result = @client.generate_content({
-        contents: {
-          role: 'user',
-          parts: {
-            text: "Hi! Please respond with 'Hello, the API is working!' and nothing else."
-          }
-        },
-        generationConfig: {
-          temperature: 0.1,
-          maxOutputTokens: 50
-        }
-      })
-      
-      end_time = Time.current
-      duration_ms = ((end_time - start_time) * 1000).round(2)
-      
-      Rails.logger.info "Simple Gemini request completed in #{duration_ms}ms"
-      Rails.logger.info "Response: #{result.inspect}"
-      
-      # Try to extract the text response
-      if result && result['candidates'] && result['candidates'][0]
-        candidate = result['candidates'][0]
-        if candidate['content'] && candidate['content']['parts'] && candidate['content']['parts'][0]
-          text = candidate['content']['parts'][0]['text']
-          Rails.logger.info "Extracted text: #{text}"
-          return { success: true, text: text, duration_ms: duration_ms }
-        end
-      end
-      
-      Rails.logger.error "Could not extract text from response"
-      return { success: false, error: "No text in response", duration_ms: duration_ms }
-      
-    rescue => e
-      end_time = Time.current
-      duration_ms = ((end_time - start_time) * 1000).round(2)
-      Rails.logger.error "Simple Gemini request failed: #{e.message}"
-      return { success: false, error: e.message, duration_ms: duration_ms }
-    end
+    @gemini_client.test_simple_request
   end
 
   private

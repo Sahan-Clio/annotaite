@@ -85,7 +85,7 @@ const Parse: React.FC = () => {
       [fieldId]: newPosition
     }));
     
-    console.log(`Field ${fieldId} moved to:`, newPosition);
+
   }, []);
 
   // Handle scroll events to update overlay positions
@@ -110,7 +110,7 @@ const Parse: React.FC = () => {
     try {
       const result = await parseDocumentMutation.mutateAsync(uploadedFile);
       setParseData(result);
-      console.log('Parse data received:', result);
+
     } catch (error) {
       console.error('Parse error:', error);
     }
@@ -120,9 +120,7 @@ const Parse: React.FC = () => {
     if (!parseData) return;
 
     try {
-      console.log('Starting AI analysis with payload:', parseData);
       const result = await analyzeWithAIMutation.mutateAsync(parseData);
-      console.log('AI analysis result:', result);
       
       // Extract the enhanced data from the nested response
       const enhancedData = result.data || result;
@@ -142,7 +140,7 @@ const Parse: React.FC = () => {
       setSelectedAssociation(null);
       setHiddenAssociations(new Set());
       
-      console.log(`AI filtering enabled: ${enhancedData.field_associations.length} associations (filtered from ${parseData.fields.length} fields)`);
+
     } catch (error) {
       console.error('AI analysis error:', error);
     }
@@ -150,45 +148,17 @@ const Parse: React.FC = () => {
 
   const handlePdfLoadSuccess = (numPages: number, pageDimensions: { width: number; height: number }) => {
     setPdfLoaded(true);
-    console.log('PDF loaded:', numPages, 'pages');
-    console.log('Rendered page dimensions:', pageDimensions);
+
     
     // Wait a bit for pages to render, then enable overlays
     setTimeout(() => {
       setOverlaysReady(true);
-      console.log('Overlays ready, checking page positions...');
-      
-      // Debug: log all page positions and sample association data
-      for (let i = 1; i <= numPages; i++) {
-        const position = getPageElementPosition(i);
-        console.log(`Page ${i} position:`, position);
-        
-        // Log some sample associations for this page
-        const pageAssociations = currentAssociations.filter(assoc => assoc.page === i) || [];
-        console.log(`Page ${i} has ${pageAssociations.length} associations`);
-        
-        // Show first few associations as examples
-        pageAssociations.slice(0, 3).forEach((assoc, index) => {
-          const labelWidth = (assoc.label.bounding_box.x_max - assoc.label.bounding_box.x_min) * 100;
-          const labelHeight = (assoc.label.bounding_box.y_max - assoc.label.bounding_box.y_min) * 100;
-          const inputWidth = (assoc.input.bounding_box.x_max - assoc.input.bounding_box.x_min) * 100;
-          const inputHeight = (assoc.input.bounding_box.y_max - assoc.input.bounding_box.y_min) * 100;
-          
-          console.log(`  Sample association ${index + 1}:`, {
-            label: assoc.label.text.substring(0, 30),
-            inputType: assoc.input.type,
-            labelSize: `${labelWidth.toFixed(2)}% x ${labelHeight.toFixed(2)}%`,
-            inputSize: `${inputWidth.toFixed(2)}% x ${inputHeight.toFixed(2)}%`
-          });
-        });
-      }
     }, 500);
   };
 
   // Function to get the actual position and dimensions of a PDF page element
   const getPageElementPosition = (pageNumber: number) => {
     if (!pdfViewerRef.current) {
-      console.log('PDF viewer ref not available');
       return null;
     }
     
@@ -198,35 +168,29 @@ const Parse: React.FC = () => {
       const rect = pageContainer.getBoundingClientRect();
       const containerRect = pdfViewerRef.current.getBoundingClientRect();
       
-      const position = {
+      return {
         left: rect.left - containerRect.left,
         top: rect.top - containerRect.top,
         width: rect.width,
         height: rect.height
       };
-      console.log(`Page ${pageNumber} container position:`, position);
-      return position;
     }
     
     // Fallback: try to find by class and index
     const pageElements = pdfViewerRef.current.querySelectorAll('.react-pdf__Page');
-    console.log(`Found ${pageElements.length} page elements, looking for page ${pageNumber}`);
     const targetPage = pageElements[pageNumber - 1];
     if (targetPage) {
       const rect = targetPage.getBoundingClientRect();
       const containerRect = pdfViewerRef.current.getBoundingClientRect();
       
-      const position = {
+      return {
         left: rect.left - containerRect.left,
         top: rect.top - containerRect.top,
         width: rect.width,
         height: rect.height
       };
-      console.log(`Page ${pageNumber} position:`, position);
-      return position;
     }
     
-    console.log(`Could not find page element for page ${pageNumber}`);
     return null;
   };
 

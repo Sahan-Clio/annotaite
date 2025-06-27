@@ -34,14 +34,13 @@ export const PdfViewer = forwardRef<HTMLDivElement, PdfViewerProps>(
           if (pageElement) {
             const rect = pageElement.getBoundingClientRect();
             const renderedDimensions = { width: rect.width, height: rect.height };
-            console.log('Rendered page dimensions:', renderedDimensions);
-            console.log('Original page dimensions:', { width: page.width, height: page.height });
+            
             setPageDimensions(renderedDimensions);
             onLoadSuccess?.(numPages || 1, renderedDimensions);
           } else {
             // Fallback to page viewport dimensions
             const { width, height } = page;
-            console.log('Fallback page dimensions:', { width, height });
+      
             setPageDimensions({ width, height });
             onLoadSuccess?.(numPages || 1, { width, height });
           }
@@ -89,7 +88,7 @@ export const PdfViewer = forwardRef<HTMLDivElement, PdfViewerProps>(
                   pageNumber={index + 1}
                   scale={scale}
                   onLoadSuccess={onPageLoadSuccess}
-                  onLoadError={(error) => console.warn(`Page ${index + 1} load error:`, error)}
+                  onLoadError={(error) => {}}
                   className="shadow-lg border border-gray-300 bg-white"
                   renderTextLayer={true}
                   renderAnnotationLayer={true}

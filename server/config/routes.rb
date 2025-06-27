@@ -6,9 +6,15 @@ Rails.application.routes.draw do
   namespace :api do
     namespace :v1 do
       resources :welcome, only: :index
-      post 'parse', to: 'document_parser#parse'
-      post 'ai-analyze', to: 'document_parser#ai_analyze'
-      get 'gemini-test', to: 'document_parser#gemini_test'
+      
+      # Document uploads and parsing
+      resources :uploads, only: [:create]
+      post 'parse', to: 'uploads#create' # Legacy route for compatibility
+      
+      # AI analysis
+      resources :ai_analyses, only: [:create]
+      post 'ai-analyze', to: 'ai_analyses#create' # Legacy route for compatibility
+      get 'gemini-test', to: 'ai_analyses#test'
     end
   end
 

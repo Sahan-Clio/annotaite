@@ -113,7 +113,7 @@ const OverlayBox: React.FC<OverlayBoxProps> = ({
 
   // Mouse event handlers for dragging
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    console.log('Mouse down on overlay', field.id);
+
     e.preventDefault();
     e.stopPropagation();
     
@@ -144,7 +144,7 @@ const OverlayBox: React.FC<OverlayBoxProps> = ({
         const newY = Math.max(0, Math.min(95, prev.y + deltaYPercent));
         
         if (Math.abs(deltaX) > 1 || Math.abs(deltaY) > 1) {
-          console.log(`Drag [${field.id}]: ${newX.toFixed(1)}%, ${newY.toFixed(1)}%`);
+    
         }
         
         return { ...prev, x: newX, y: newY };
@@ -157,14 +157,7 @@ const OverlayBox: React.FC<OverlayBoxProps> = ({
         const newWidth = Math.max(1, Math.min(50, prev.width + deltaXPercent));
         const newHeight = Math.max(0.5, Math.min(50, prev.height + deltaYPercent));
         
-        if (Math.abs(deltaX) > 1 || Math.abs(deltaY) > 1) {
-          console.log(`Resize [${field.id}]:`, {
-            deltaY: deltaY.toFixed(0),
-            prevHeight: prev.height.toFixed(1),
-            newHeight: newHeight.toFixed(1),
-            size: `${newWidth.toFixed(1)}% x ${newHeight.toFixed(1)}%`
-          });
-        }
+
         
         return { ...prev, width: newWidth, height: newHeight };
       });
@@ -191,7 +184,7 @@ const OverlayBox: React.FC<OverlayBoxProps> = ({
 
   // Resize handle mouse down
   const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
-    console.log('Resize handle clicked for', field.id);
+
     e.preventDefault();
     e.stopPropagation();
     

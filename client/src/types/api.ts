@@ -19,7 +19,6 @@ export interface ParseResponse {
   document_info: DocumentInfo;
   error?: string;
   // Enhanced Gemini AI response fields
-  field_groups?: FieldGroup[];
   processing_info?: ProcessingInfo;
 }
 
@@ -39,11 +38,7 @@ export interface FieldAssociation {
   page: number;
 }
 
-export interface FieldGroup {
-  group_name: string;
-  fields: string[];
-  group_type: GroupType;
-}
+
 
 export interface ProcessingInfo {
   enhanced_by?: string;
@@ -96,12 +91,7 @@ export type FieldPurpose =
   | 'checkbox_option'
   | 'other';
 
-export type GroupType = 
-  | 'personal_info'
-  | 'address'
-  | 'contact'
-  | 'agreement'
-  | 'other';
+
 
 export interface FormFieldInfo {
   field_type?: 'text' | 'checkbox';
