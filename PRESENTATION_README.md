@@ -23,13 +23,13 @@
 
 | Problem | Impact | Business Cost |
 |---------|--------|---------------|
-| **Single Python Script** | No scalability, maintenance nightmare | High technical debt |
+| **Single Python Script** | No scalability, maintenance challenges | High technical debt |
 | **Basic pdfminer Parsing** | Limited field detection accuracy | Manual corrections needed |
 | **Command-Line Only** | Requires technical expertise | User adoption barriers |
 | **No Real-time Processing** | Batch-only workflows | Slow turnaround times |
 | **Legacy Dependencies** | Security vulnerabilities, outdated libs | Compliance risks |
 
-### 👥 **User Experience Disasters**
+### 👥 **User Experience Challenges**
 
 **Problems:**
 - ❌ Steep learning curve for non-technical users
@@ -48,13 +48,13 @@
 | **Processing Speed** | Slow batch processing | Hours per document set |
 | **AI Enhancement** | No AI integration | Manual field classification |
 
-### 🏗️ **Scalability & Maintenance Problems**
+### 🏗️ **Scalability & Maintenance Issues**
 
 - **No API Architecture**: Cannot integrate with other systems
 - **Single-User Processing**: No collaboration features
 - **No Caching**: Repeated processing of same documents
 - **Manual Deployment**: Complex setup and maintenance
-- **No Error Handling**: Silent failures and poor debugging
+- **Limited Error Handling**: Silent failures and poor debugging
 
 ---
 
@@ -109,7 +109,7 @@ RESTful API with comprehensive error handling, enabling easy integration with ex
 | **Scalability** | ❌ Single script | ✅ Microservices architecture |
 | **API Integration** | ❌ None | ✅ RESTful APIs |
 | **Coordinate Precision** | ❌ None | ✅ Normalized coordinates |
-| **Error Handling** | ❌ Poor | ✅ Comprehensive |
+| **Error Handling** | ❌ Limited | ✅ Comprehensive |
 
 ---
 
