@@ -13,20 +13,10 @@ export interface FormField {
 
 export interface ParseResponse {
   success: boolean;
-  fields: ProcessedField[];
+  fields: Field[];
   total_fields: number;
-  page: number;
-  pdf_filename: string;
+  document_info: DocumentInfo;
   error?: string;
-}
-
-export interface ProcessedField {
-  name: string;
-  type: 'text_field' | 'checkbox' | 'signature' | 'date' | 'other';
-  bbox: BoundingBox;
-  confidence: number;
-  label?: string;
-  value?: string | boolean;
 }
 
 export interface DocumentInfo {
@@ -47,22 +37,15 @@ export interface Field {
   page: number;
   bounding_box: BoundingBox;
   form_field_info?: FormFieldInfo;
-  related_fields?: string[];
-  parent_section?: string;
 }
 
 export type FieldType = 
-  | 'form_field_label'
-  | 'form_field_input'
-  | 'section_header'
-  | 'instruction_text'
-  | 'static_text'
-  | 'checkbox'
-  | 'signature_area';
+  | 'label'
+  | 'text_input'
+  | 'checkbox';
 
 export interface FormFieldInfo {
-  field_group_id?: string;
-  field_type?: 'text' | 'checkbox' | 'radio' | 'date' | 'email' | 'phone' | 'signature';
+  field_type?: 'text' | 'checkbox';
   is_required?: boolean;
   placeholder_text?: string;
 }

@@ -39,23 +39,14 @@ const OverlayBox: React.FC<OverlayBoxProps> = ({
     
     let colorStyle = "";
     switch (field.type) {
-      case 'form_field_label':
+      case 'label':
         colorStyle = "border-blue-500 bg-blue-100 hover:bg-blue-200";
         break;
-      case 'form_field_input':
+      case 'text_input':
         colorStyle = "border-green-500 bg-green-100 hover:bg-green-200";
-        break;
-      case 'section_header':
-        colorStyle = "border-purple-500 bg-purple-100 hover:bg-purple-200";
-        break;
-      case 'instruction_text':
-        colorStyle = "border-yellow-500 bg-yellow-100 hover:bg-yellow-200";
         break;
       case 'checkbox':
         colorStyle = "border-orange-500 bg-orange-100 hover:bg-orange-200";
-        break;
-      case 'signature_area':
-        colorStyle = "border-red-500 bg-red-100 hover:bg-red-200";
         break;
       default:
         colorStyle = "border-gray-500 bg-gray-100 hover:bg-gray-200";
@@ -70,14 +61,10 @@ const OverlayBox: React.FC<OverlayBoxProps> = ({
 
   const getFieldTypeLabel = () => {
     switch (field.type) {
-      case 'form_field_label': return 'Label';
-      case 'form_field_input': return 'Input';
-      case 'section_header': return 'Header';
-      case 'instruction_text': return 'Instructions';
+      case 'label': return 'Label';
+      case 'text_input': return 'Text Input';
       case 'checkbox': return 'Checkbox';
-      case 'signature_area': return 'Signature';
-      case 'static_text': return 'Text';
-      default: return 'Text';
+      default: return 'Field';
     }
   };
 

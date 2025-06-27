@@ -14,6 +14,9 @@ from typing import List, Dict, Tuple, Any
 
 from .main import process_form_fields
 
+# Configuration constants for filtering
+MIN_LABEL_LENGTH = 5  # Minimum character length for labels to be included
+
 # Self-contained form field detection functions
 def split_pdf_into_pages(pdf_path: Path, temp_dir: Path):
     """Split a multi-page PDF into individual single-page PDFs."""
@@ -282,10 +285,14 @@ def process_single_page_for_fields(page_pdf_path, pdf_image, page_number, output
         }
 
 
-def process_pdf_for_form_fields(pdf_path):
+def process_pdf_for_form_fields(pdf_path, min_label_length=MIN_LABEL_LENGTH):
     """
     Process a PDF file for form field detection and return structured results.
     This function is called by the Flask server.
+    
+    Args:
+        pdf_path: Path to the PDF file to process
+        min_label_length: Minimum character length for labels to be included (default: 5)
     """
     try:
         pdf_path = Path(pdf_path)
@@ -328,11 +335,18 @@ def process_pdf_for_form_fields(pdf_path):
                 page_num = page_result['page']
                 
                 # Add text elements (labels) - flatten coordinates for Rails compatibility
+                # Filter out labels with less than 5 characters
                 for text_elem in page_result.get('text_elements_raw', []):
+                    text_content = text_elem.get('text', '').strip()
+                    
+                    # Skip labels that are too short
+                    if len(text_content) < min_label_length:
+                        continue
+                    
                     element = {
                         'type': 'label',
                         'page': page_num,
-                        'text': text_elem.get('text', ''),
+                        'text': text_content,
                         'x': text_elem.get('x', 0),
                         'y': text_elem.get('y', 0),
                         'width': text_elem.get('width', 0),
@@ -484,13 +498,17 @@ def process_pdf_endpoint():
         if pdf_file.filename == '':
             return jsonify({'error': 'PDF file must be selected'}), 400
         
+        # Get optional minimum label length parameter
+        min_label_length = request.args.get('min_label_length', MIN_LABEL_LENGTH, type=int)
+        min_label_length = max(1, min(50, min_label_length))  # Clamp between 1 and 50
+        
         # Save uploaded PDF temporarily
         with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as pdf_temp:
             pdf_file.save(pdf_temp.name)
             pdf_path = pdf_temp.name
         
         try:
-            result = process_pdf_for_form_fields(pdf_path)
+            result = process_pdf_for_form_fields(pdf_path, min_label_length)
             
             return jsonify(result)
             

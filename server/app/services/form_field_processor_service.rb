@@ -107,10 +107,10 @@ class FormFieldProcessorService
       
       # Map our types to frontend types
       field_type = case element['type']
-                   when 'label' then 'form_field_label'
-                   when 'input' then 'form_field_input'
+                   when 'label' then 'label'
+                   when 'input' then 'text_input'
                    when 'checkbox' then 'checkbox'
-                   else 'static_text'
+                   else 'label'
                    end
       
       # Create field object matching frontend expectations

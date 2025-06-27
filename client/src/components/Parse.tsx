@@ -14,13 +14,9 @@ const Parse: React.FC = () => {
   const [selectedField, setSelectedField] = useState<Field | null>(null);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [visibleFieldTypes, setVisibleFieldTypes] = useState<Set<FieldType>>(new Set([
-    'form_field_label',
-    'form_field_input',
-    'section_header',
-    'instruction_text',
-    'checkbox',
-    'signature_area',
-    'static_text'
+    'label',
+    'text_input',
+    'checkbox'
   ]));
   const [pdfLoaded, setPdfLoaded] = useState(false);
   const [overlaysReady, setOverlaysReady] = useState(false);
@@ -36,13 +32,9 @@ const Parse: React.FC = () => {
   const uploadedFile = (location.state as any)?.file as File | undefined;
 
   const fieldTypeColors = {
-    form_field_label: { bg: 'bg-blue-100', border: 'border-blue-500', text: 'text-blue-800' },
-    form_field_input: { bg: 'bg-green-100', border: 'border-green-500', text: 'text-green-800' },
-    section_header: { bg: 'bg-purple-100', border: 'border-purple-500', text: 'text-purple-800' },
-    instruction_text: { bg: 'bg-yellow-100', border: 'border-yellow-500', text: 'text-yellow-800' },
-    checkbox: { bg: 'bg-orange-100', border: 'border-orange-500', text: 'text-orange-800' },
-    signature_area: { bg: 'bg-red-100', border: 'border-red-500', text: 'text-red-800' },
-    static_text: { bg: 'bg-gray-100', border: 'border-gray-500', text: 'text-gray-800' }
+    label: { bg: 'bg-blue-100', border: 'border-blue-500', text: 'text-blue-800' },
+    text_input: { bg: 'bg-green-100', border: 'border-green-500', text: 'text-green-800' },
+    checkbox: { bg: 'bg-orange-100', border: 'border-orange-500', text: 'text-orange-800' }
   };
 
   useEffect(() => {
@@ -225,13 +217,9 @@ const Parse: React.FC = () => {
 
   const getFieldTypeLabel = (fieldType: FieldType) => {
     switch (fieldType) {
-      case 'form_field_label': return 'Labels';
-      case 'form_field_input': return 'Inputs';
-      case 'section_header': return 'Headers';
-      case 'instruction_text': return 'Instructions';
+      case 'label': return 'Labels';
+      case 'text_input': return 'Text Inputs';
       case 'checkbox': return 'Checkboxes';
-      case 'signature_area': return 'Signatures';
-      case 'static_text': return 'Static Text';
       default: return fieldType;
     }
   };
