@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Any
 
-from .modern_extractor import extract_with_unstructured
+from .extractor import extract_with_unstructured
 
 
 def process_form_fields(pdf_path: str, document_ai_data: Dict[str, Any], debug: bool = True) -> Dict[str, Any]:

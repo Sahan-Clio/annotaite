@@ -26,8 +26,6 @@ def split_pdf_into_pages(pdf_path: Path, temp_dir: Path):
             reader = PyPDF2.PdfReader(input_file)
             total_pages = len(reader.pages)
             
-            print(f"📄 Splitting PDF into {total_pages} individual pages...")
-            
             for page_num in range(total_pages):
                 writer = PyPDF2.PdfWriter()
                 writer.add_page(reader.pages[page_num])
@@ -43,12 +41,10 @@ def split_pdf_into_pages(pdf_path: Path, temp_dir: Path):
         return page_paths, total_pages
         
     except ImportError:
-        print("❌ PyPDF2 not found. Installing...")
         import subprocess
         subprocess.check_call([sys.executable, "-m", "pip", "install", "PyPDF2"])
         return split_pdf_into_pages(pdf_path, temp_dir)
     except Exception as e:
-        print(f"❌ Error splitting PDF: {e}")
         return [], 0
 
 
@@ -57,19 +53,15 @@ def extract_text_elements_from_page(page_pdf_path: Path, page_number: int):
     try:
         from .modern_extractor import extract_with_unstructured
         
-        print(f"🔍 Extracting text elements from page {page_number}...")
         result = extract_with_unstructured(page_pdf_path, debug=False, fast_mode=True)
         
         if result.get('success', False):
             fields = result.get('form_fields', [])
-            print(f"  ✅ Found {len(fields)} text elements in {result.get('processing_time', 0):.2f}s")
             return fields
         else:
-            print(f"  ❌ Failed to extract text from page {page_number}")
             return []
             
     except Exception as e:
-        print(f"  ❌ Error extracting text from page {page_number}: {e}")
         return []
 
 
@@ -114,7 +106,6 @@ def remove_text_elements_from_image(image, text_elements):
                         cv2.rectangle(cleaned_image, (int(x), int(y)), (int(x + width), int(y + height)), (255, 255, 255), -1)
                         removed_count += 1
     
-    print(f"  🧹 Removed {removed_count} text elements from image")
     return cleaned_image
 
 
@@ -123,9 +114,6 @@ def detect_input_boxes_and_checkboxes(cleaned_image):
     import cv2
     import numpy as np
     
-    print("  🔍 Detecting input boxes and checkboxes with contour methods only...")
-    
-    # Convert to grayscale if needed
     if len(cleaned_image.shape) == 3:
         gray = cv2.cvtColor(cleaned_image, cv2.COLOR_BGR2GRAY)
     else:
@@ -135,7 +123,6 @@ def detect_input_boxes_and_checkboxes(cleaned_image):
     all_checkboxes = []
     
     # Method 1: Contour detection with multiple thresholds (blue elements)
-    print("    🔸 Multi-threshold contour detection...")
     for thresh_val in [240, 220, 200, 180, 160]:
         _, binary = cv2.threshold(gray, thresh_val, 255, cv2.THRESH_BINARY_INV)
         contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -171,9 +158,6 @@ def detect_input_boxes_and_checkboxes(cleaned_image):
     # Remove duplicates based on overlap
     unique_input_boxes = remove_overlapping_boxes(all_input_boxes)
     unique_checkboxes = remove_overlapping_boxes(all_checkboxes)
-    
-    print(f"    📊 Before deduplication: {len(all_input_boxes)} inputs, {len(all_checkboxes)} checkboxes")
-    print(f"  ✅ After deduplication: {len(unique_input_boxes)} input boxes, {len(unique_checkboxes)} checkboxes")
     
     return unique_input_boxes, unique_checkboxes
 
@@ -262,44 +246,31 @@ def normalize_pixel_coordinates(pixel_boxes, image_width, image_height, pdf_widt
 def process_single_page_for_fields(page_pdf_path, pdf_image, page_number, output_dir):
     """Process a single page using separate pipelines for labels vs input fields with coordinate normalization"""
     try:
-        print(f"📄 Processing page {page_number} with separate pipelines...")
-        
-        # Pipeline 1: Extract labels using Unstructured (new, separate)
         text_labels = extract_labels_with_unstructured(page_pdf_path, page_number)
         
-        # Pipeline 2: Extract input fields using EXISTING logic (unchanged)
-        # Step 1: Extract text elements (existing)
         text_elements = extract_text_elements_from_page(page_pdf_path, page_number)
         
-        # Step 2: Remove text from image (existing)
         import numpy as np
         cv_image = np.array(pdf_image)
         cleaned_image = remove_text_elements_from_image(cv_image, text_elements)
         
-        # Step 3: Detect input fields (existing)
         input_boxes, checkboxes = detect_input_boxes_and_checkboxes(cleaned_image)
         
-        # Step 4: Normalize coordinates for input boxes and checkboxes
         image_height, image_width = cv_image.shape[:2]
         normalized_input_boxes = normalize_pixel_coordinates(input_boxes, image_width, image_height)
         normalized_checkboxes = normalize_pixel_coordinates(checkboxes, image_width, image_height)
         
-        print(f"  🔧 Normalized {len(input_boxes)} input boxes and {len(checkboxes)} checkboxes from {image_width}x{image_height} image")
-        
         return {
             'page': page_number,
-            'text_elements': len(text_labels),  # Use Unstructured labels
+            'text_elements': len(text_labels),
             'input_boxes': len(normalized_input_boxes),
             'checkboxes': len(normalized_checkboxes),
-            'text_elements_raw': text_labels,  # Use Unstructured labels
-            'input_boxes_raw': normalized_input_boxes,  # Now normalized
-            'checkboxes_raw': normalized_checkboxes     # Now normalized
+            'text_elements_raw': text_labels,
+            'input_boxes_raw': normalized_input_boxes,
+            'checkboxes_raw': normalized_checkboxes
         }
         
     except Exception as e:
-        print(f"❌ Error processing page {page_number}: {e}")
-        import traceback
-        traceback.print_exc()
         return {
             'page': page_number,
             'text_elements': 0,
@@ -412,21 +383,12 @@ def process_pdf_for_form_fields(pdf_path):
                 }
             }
             
-            print(f"🎯 Processing complete: {summary['total_elements']} total elements")
-            print(f"   📝 Labels: {summary['by_type']['labels']}")
-            print(f"   📝 Inputs: {summary['by_type']['inputs']}")
-            print(f"   ☑️  Checkboxes: {summary['by_type']['checkboxes']}")
-            
-            # Return structured result
             return {
                 'summary': summary,
                 'elements': all_elements
             }
             
     except Exception as e:
-        print(f"❌ Error processing PDF: {e}")
-        import traceback
-        traceback.print_exc()
         raise
 
 
@@ -435,21 +397,15 @@ def extract_labels_with_unstructured(page_pdf_path: Path, page_number: int):
     try:
         from .modern_extractor import extract_with_unstructured
         
-        print(f"🔍 Extracting labels from page {page_number} using Unstructured...")
-        
-        # Use the proven Unstructured approach
         result = extract_with_unstructured(page_pdf_path, debug=False, fast_mode=True)
         
         if result.get('success', False):
             fields = result.get('form_fields', [])
-            print(f"  ✅ Found {len(fields)} text labels using Unstructured in {result.get('processing_time', 0):.2f}s")
             return fields
         else:
-            print(f"  ❌ Failed to extract labels from page {page_number}")
             return []
             
     except Exception as e:
-        print(f"  ❌ Error extracting labels from page {page_number}: {e}")
         return []
 
 
@@ -534,12 +490,7 @@ def process_pdf_endpoint():
             pdf_path = pdf_temp.name
         
         try:
-            print(f"🔄 Processing PDF: {pdf_file.filename}")
-            
-            # Process the PDF for form field detection using the actual detection logic
             result = process_pdf_for_form_fields(pdf_path)
-            
-            print(f"✅ Processing complete: {result['summary']['total_elements']} elements found")
             
             return jsonify(result)
             
@@ -552,14 +503,8 @@ def process_pdf_endpoint():
                 
     except Exception as e:
         app.logger.error(f"Error processing PDF: {str(e)}")
-        import traceback
-        traceback.print_exc()
         return jsonify({'error': f'PDF processing failed: {str(e)}'}), 500
 
 
 if __name__ == '__main__':
-    print("🚀 Starting Form Processor Server (Modern Unstructured)")
-    print("📍 Health check: http://localhost:8000/health")
-    print("📍 Process endpoint: http://localhost:8000/process")
-    print("📍 Process PDF endpoint: http://localhost:8000/process_pdf")
     app.run(host='0.0.0.0', port=8000, debug=True) 
