@@ -6,6 +6,7 @@ interface OverlayBoxProps {
   pageDimensions?: PageDimension;
   onClick?: () => void;
   isSelected?: boolean;
+  isHovered?: boolean;
   onPositionChange?: (fieldId: string, newPosition: { x: number; y: number; width: number; height: number }) => void;
   onClose?: (fieldId: string) => void;
 }
@@ -15,13 +16,13 @@ const OverlayBox: React.FC<OverlayBoxProps> = ({
   pageDimensions, 
   onClick, 
   isSelected = false,
+  isHovered = false,
   onPositionChange,
   onClose 
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
-  const [isHovered, setIsHovered] = useState(false);
   const [position, setPosition] = useState({
     x: field.bounding_box.x_min * 100,
     y: field.bounding_box.y_min * 100,
@@ -40,23 +41,45 @@ const OverlayBox: React.FC<OverlayBoxProps> = ({
     let colorStyle = "";
     switch (field.type) {
       case 'label':
-        colorStyle = "border-blue-500 bg-blue-100 hover:bg-blue-200";
+        if (isHovered && !isSelected) {
+          colorStyle = "border-blue-600 bg-blue-200 shadow-md";
+        } else {
+          colorStyle = "border-blue-500 bg-blue-100 hover:bg-blue-200";
+        }
         break;
       case 'text_input':
-        colorStyle = "border-green-500 bg-green-100 hover:bg-green-200";
+        if (isHovered && !isSelected) {
+          colorStyle = "border-green-600 bg-green-200 shadow-md";
+        } else {
+          colorStyle = "border-green-500 bg-green-100 hover:bg-green-200";
+        }
         break;
       case 'checkbox':
-        colorStyle = "border-orange-500 bg-orange-100 hover:bg-orange-200";
+        if (isHovered && !isSelected) {
+          colorStyle = "border-orange-600 bg-orange-200 shadow-md";
+        } else {
+          colorStyle = "border-orange-500 bg-orange-100 hover:bg-orange-200";
+        }
         break;
       default:
-        colorStyle = "border-gray-500 bg-gray-100 hover:bg-gray-200";
+        if (isHovered && !isSelected) {
+          colorStyle = "border-gray-600 bg-gray-200 shadow-md";
+        } else {
+          colorStyle = "border-gray-500 bg-gray-100 hover:bg-gray-200";
+        }
     }
     
     return `${baseStyle} ${interactionStyle} ${transitionStyle} ${hoverStyle} ${colorStyle}`;
   };
 
   const getSelectedStyle = () => {
-    return isSelected ? "ring-4 ring-blue-300 shadow-xl z-[1003]" : "z-[1002]";
+    if (isSelected) {
+      return "ring-4 ring-blue-300 shadow-xl z-[1003]";
+    } else if (isHovered) {
+      return "ring-2 ring-yellow-300 shadow-lg z-[1003] scale-105";
+    } else {
+      return "z-[1002]";
+    }
   };
 
   const getFieldTypeLabel = () => {
@@ -257,8 +280,6 @@ const OverlayBox: React.FC<OverlayBoxProps> = ({
       className={`${getFieldTypeStyle()} ${getSelectedStyle()}`}
       style={style}
       onMouseDown={handleMouseDown}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
       title={`${getFieldTypeLabel()}: ${field.text} (Page ${field.page}) - Size: ${rawWidth.toFixed(1)}% x ${rawHeight.toFixed(1)}%`}
     >
       {/* Field type indicator - show for selected fields or larger fields */}
@@ -321,20 +342,7 @@ const OverlayBox: React.FC<OverlayBoxProps> = ({
         </div>
       )}
       
-      {/* Close button - show when selected or hovered */}
-      {(isSelected || isHovered) && onClose && (
-        <button
-          className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center text-xs font-bold border-2 border-white shadow-lg z-[1005] transition-colors"
-          onClick={handleCloseClick}
-          title="Hide this field"
-          style={{
-            fontSize: '10px',
-            lineHeight: '1',
-          }}
-        >
-          ×
-        </button>
-      )}
+
     </div>
   );
 };

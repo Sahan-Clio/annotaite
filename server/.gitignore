@@ -33,10 +33,7 @@
 # Ignore master key for decrypting credentials and more.
 /config/master.key
 
-# Cache directory for Google Document AI responses
-/cache/
-cache/
-*.cache
+
 
 # Ignore temporary files
 tmp/

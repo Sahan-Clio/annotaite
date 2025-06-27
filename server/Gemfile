@@ -22,8 +22,7 @@ gem "dotenv-rails"
 # HTTP client for processor service
 gem "httparty"
 
-# Google Document AI
-gem "google-cloud-document_ai"
+
 
 group :development, :test do
   gem "debug", platforms: %i[ mri windows ]

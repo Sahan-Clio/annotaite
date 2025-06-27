@@ -11,13 +11,12 @@ from typing import Dict, List, Any
 from .extractor import extract_with_unstructured
 
 
-def process_form_fields(pdf_path: str, document_ai_data: Dict[str, Any], debug: bool = True) -> Dict[str, Any]:
+def process_form_fields(pdf_path: str, debug: bool = True) -> Dict[str, Any]:
     """
-    Process PDF with Document AI data to extract form fields using modern Unstructured approach.
+    Process PDF to extract form fields using modern Unstructured approach.
     
     Args:
         pdf_path: Path to PDF file
-        document_ai_data: Document AI response data
         debug: Whether to generate debug output with visual field marking
         
     Returns:
@@ -60,13 +59,7 @@ def main():
     
     pdf_path = sys.argv[1]
     
-    # Mock Document AI data for testing
-    mock_docai_data = {
-        'document_info': {'pages': []},
-        'fields': []
-    }
-    
-    result = process_form_fields(pdf_path, mock_docai_data, debug=True)
+    result = process_form_fields(pdf_path, debug=True)
     
     if result.get('success', False):
         print(f"\n🎉 Processing completed successfully!")

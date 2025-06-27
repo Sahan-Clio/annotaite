@@ -4,6 +4,7 @@ RSpec.describe Api::V1::DocumentParserController, type: :controller do
   describe 'POST #parse' do
     let(:mock_result) do
       {
+        success: true,
         document_info: {
           total_pages: 1,
           page_dimensions: [
@@ -13,7 +14,7 @@ RSpec.describe Api::V1::DocumentParserController, type: :controller do
         fields: [
           {
             id: 'field_1',
-            type: 'form_field_label',
+            type: 'text_input',
             text: 'First Name',
             page: 1,
             bounding_box: { x_min: 0.1, y_min: 0.1, x_max: 0.3, y_max: 0.15 }
@@ -31,7 +32,7 @@ RSpec.describe Api::V1::DocumentParserController, type: :controller do
 
     context 'when file is uploaded and service succeeds' do
       before do
-        allow_any_instance_of(DocumentAiParserService).to receive(:parse).and_return(mock_result)
+        allow_any_instance_of(FormFieldProcessorService).to receive(:process_pdf).and_return(mock_result)
       end
 
       it 'returns parsed document data' do
@@ -48,7 +49,7 @@ RSpec.describe Api::V1::DocumentParserController, type: :controller do
         
         expect(response).to have_http_status(:bad_request)
         parsed_response = JSON.parse(response.body)
-        expect(parsed_response['error']).to eq('No file uploaded')
+        expect(parsed_response['error']).to eq('No file provided')
       end
     end
 
@@ -65,13 +66,13 @@ RSpec.describe Api::V1::DocumentParserController, type: :controller do
         
         expect(response).to have_http_status(:bad_request)
         parsed_response = JSON.parse(response.body)
-        expect(parsed_response['error']).to eq('Invalid file type')
+        expect(parsed_response['error']).to eq('Only PDF files are supported')
       end
     end
 
     context 'when service fails' do
       before do
-        allow_any_instance_of(DocumentAiParserService).to receive(:parse).and_raise(StandardError.new('API Error'))
+        allow_any_instance_of(FormFieldProcessorService).to receive(:process_pdf).and_raise(StandardError.new('Processing Error'))
       end
 
       it 'returns error response' do
@@ -79,8 +80,8 @@ RSpec.describe Api::V1::DocumentParserController, type: :controller do
         
         expect(response).to have_http_status(:internal_server_error)
         parsed_response = JSON.parse(response.body)
-        expect(parsed_response['error']).to eq('Document parsing failed')
-        expect(parsed_response['details']).to eq('API Error')
+        expect(parsed_response['success']).to eq(false)
+        expect(parsed_response['error']).to eq('Processing Error')
       end
     end
   end

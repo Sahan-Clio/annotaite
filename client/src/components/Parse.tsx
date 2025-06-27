@@ -27,6 +27,7 @@ const Parse: React.FC = () => {
   const [fieldTypesOpen, setFieldTypesOpen] = useState(true);
   const [fieldsOpen, setFieldsOpen] = useState(true);
   const [hiddenFields, setHiddenFields] = useState<Set<string>>(new Set());
+  const [hoveredField, setHoveredField] = useState<string | null>(null);
 
   // Get the uploaded file from navigation state
   const uploadedFile = (location.state as any)?.file as File | undefined;
@@ -186,6 +187,19 @@ const Parse: React.FC = () => {
     setVisibleFieldTypes(newVisibleTypes);
   };
 
+  const toggleAllFields = () => {
+    const allFieldTypes: FieldType[] = ['label', 'text_input', 'checkbox'];
+    const allVisible = allFieldTypes.every(type => visibleFieldTypes.has(type));
+    
+    if (allVisible) {
+      // If all are visible, hide all
+      setVisibleFieldTypes(new Set());
+    } else {
+      // If some are hidden, show all
+      setVisibleFieldTypes(new Set(allFieldTypes));
+    }
+  };
+
   const getFieldTypeCount = (fieldType: FieldType) => {
     return parseData?.fields.filter(field => field.type === fieldType).length || 0;
   };
@@ -325,11 +339,11 @@ const Parse: React.FC = () => {
   const visibleFields = getVisibleFields();
 
   return (
-    <div className="flex min-h-screen bg-gray-100">
-      {/* Sidebar */}
-      <div className="w-80 bg-white shadow-lg border-r border-gray-200 flex flex-col min-h-screen">
-        {/* Top (non-scrolling) */}
-        <div className="shrink-0">
+    <div className="min-h-screen bg-gray-100 relative">
+      {/* Fixed Sidebar */}
+      <div className="fixed left-0 top-0 w-80 bg-white shadow-lg border-r border-gray-200 flex flex-col h-screen overflow-hidden z-10">
+        {/* Fixed Top Section */}
+        <div className="shrink-0 bg-white border-b border-gray-300">
           {/* Header (more compact) */}
           <div className="p-2 border-b border-gray-200">
             <div className="flex items-center justify-between mb-1">
@@ -371,25 +385,37 @@ const Parse: React.FC = () => {
               </svg>
             </button>
             {fieldTypesOpen && (
-              <div className="px-4 pb-2 space-y-1">
-                {Object.keys(fieldTypeColors).map((fieldType) => {
-                  const count = getFieldTypeCount(fieldType as FieldType);
-                  const colors = fieldTypeColors[fieldType as FieldType];
-                  const isVisible = visibleFieldTypes.has(fieldType as FieldType);
-                  return (
-                    <label key={fieldType} className="flex items-center space-x-2 text-xs cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={isVisible}
-                        onChange={() => toggleFieldType(fieldType as FieldType)}
-                        className="rounded border-gray-300"
-                      />
-                      <span className={`px-2 py-1 rounded text-xs ${colors.bg} ${colors.text}`}>
-                        {getFieldTypeLabel(fieldType as FieldType)} ({count})
-                      </span>
-                    </label>
-                  );
-                })}
+              <div className="px-4 pb-2 space-y-2">
+                {/* Toggle All Button */}
+                <button
+                  onClick={toggleAllFields}
+                  className="w-full py-1 px-2 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 rounded border border-gray-300 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {visibleFieldTypes.size === 0 ? 'Show All Fields' : 
+                   visibleFieldTypes.size === 3 ? 'Hide All Fields' : 'Show All Fields'}
+                </button>
+                
+                {/* Individual Field Type Toggles */}
+                <div className="space-y-1">
+                  {Object.keys(fieldTypeColors).map((fieldType) => {
+                    const count = getFieldTypeCount(fieldType as FieldType);
+                    const colors = fieldTypeColors[fieldType as FieldType];
+                    const isVisible = visibleFieldTypes.has(fieldType as FieldType);
+                    return (
+                      <label key={fieldType} className="flex items-center space-x-2 text-xs cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={isVisible}
+                          onChange={() => toggleFieldType(fieldType as FieldType)}
+                          className="rounded border-gray-300"
+                        />
+                        <span className={`px-2 py-1 rounded text-xs ${colors.bg} ${colors.text}`}>
+                          {getFieldTypeLabel(fieldType as FieldType)} ({count})
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>
@@ -397,7 +423,20 @@ const Parse: React.FC = () => {
           {/* Selected Field Info (more compact) */}
           {selectedField && (
             <div className="p-2 border-b border-gray-200">
-              <h3 className="text-xs font-semibold text-gray-700 mb-1">Selected Field</h3>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-xs font-semibold text-gray-700">Selected Field</h3>
+                <button
+                  onClick={() => handleFieldClose(selectedField.id)}
+                  className="w-4 h-4 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center text-xs font-bold transition-colors opacity-70 hover:opacity-100"
+                  title="Hide this field"
+                  style={{
+                    fontSize: '10px',
+                    lineHeight: '1',
+                  }}
+                >
+                  ×
+                </button>
+              </div>
               <div className="space-y-1 text-xs">
                 <div>
                   <span className="font-medium text-gray-600">Type:</span>
@@ -413,16 +452,6 @@ const Parse: React.FC = () => {
                   <span className="font-medium text-gray-600">Page:</span>
                   <span className="ml-2 text-gray-800">{selectedField.page}</span>
                 </div>
-                <div>
-                  <span className="font-medium text-gray-600">Position:</span>
-                  <span className="ml-2 text-gray-500 text-xs">
-                    ({selectedField.bounding_box.x_min.toFixed(3)}, {selectedField.bounding_box.y_min.toFixed(3)})
-                  </span>
-                </div>
-                <div>
-                  <span className="font-medium text-gray-600">ID:</span>
-                  <span className="ml-2 text-gray-500 font-mono text-xs">{selectedField.id}</span>
-                </div>
                 {selectedField.form_field_info && (
                   <div>
                     <span className="font-medium text-gray-600">Input Type:</span>
@@ -432,93 +461,111 @@ const Parse: React.FC = () => {
               </div>
             </div>
           )}
+
+          {/* Fixed Search Section */}
+          <div className="p-2 border-b border-gray-200 bg-gray-50">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-semibold text-gray-700">Fields ({visibleFields.length})</span>
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded"
+                  title="Clear search"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            {/* Search input */}
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Search fields..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full px-3 py-2 pr-8 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+            </div>
+          </div>
         </div>
-        {/* Field List (scrollable, simple list) */}
-        <div className="flex-1 min-h-0 overflow-y-auto">
-          {/* Fields section header (collapsible) */}
-          <div className="border-b border-gray-200">
-            <button
-              className="w-full flex items-center justify-between px-2 py-2 text-sm font-semibold text-gray-700 bg-gray-50 hover:bg-gray-100 focus:outline-none"
-              onClick={() => setFieldsOpen((open) => !open)}
-              aria-expanded={fieldsOpen}
-            >
-              <span>Fields ({visibleFields.length})</span>
-              <div className="flex items-center space-x-2">
-                {searchTerm && fieldsOpen && (
+
+        {/* Scrollable Fields List */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="p-2 space-y-1">
+            {visibleFields.map((field) => {
+              const colors = fieldTypeColors[field.type];
+              const isSelected = selectedField?.id === field.id;
+              
+              return (
+                <div
+                  key={field.id}
+                  className={`relative p-2 rounded border transition-all hover:shadow-sm ${
+                    isSelected 
+                      ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200' 
+                      : `${colors.border} ${colors.bg} hover:shadow-md`
+                  }`}
+                  onMouseEnter={() => setHoveredField(field.id)}
+                  onMouseLeave={() => setHoveredField(null)}
+                >
+                  {/* Close button - top right corner */}
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      setSearchTerm('');
+                      handleFieldClose(field.id);
                     }}
-                    className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded"
-                    title="Clear search"
+                    className="absolute top-1 right-1 w-4 h-4 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center text-xs font-bold transition-colors opacity-70 hover:opacity-100 z-10"
+                    title="Hide this field"
+                    style={{
+                      fontSize: '10px',
+                      lineHeight: '1',
+                    }}
                   >
-                    Clear
+                    ×
                   </button>
-                )}
-                <svg className={`w-4 h-4 transition-transform ${fieldsOpen ? '' : 'rotate-180'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </div>
-            </button>
-          </div>
-          
-          {fieldsOpen && (
-            <div className="p-2">
-              {/* Search input */}
-              <div className="mb-3 relative">
-                <input
-                  type="text"
-                  placeholder="Search fields..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full px-3 py-2 pr-8 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                </div>
-              </div>
-              
-              <div className="space-y-1">
-                {visibleFields.map((field) => {
-                  const colors = fieldTypeColors[field.type];
-                  const isSelected = selectedField?.id === field.id;
-                  
-                  return (
-                    <div
-                      key={field.id}
-                      className={`p-2 rounded border cursor-pointer transition-all hover:shadow-sm ${
-                        isSelected 
-                          ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200' 
-                          : `${colors.border} ${colors.bg} hover:shadow-md`
-                      }`}
-                      onClick={() => {
-                        setSelectedField(field);
-                        scrollToField(field);
-                      }}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className={`text-xs px-2 py-1 rounded ${colors.bg} ${colors.text} font-medium`}>
-                          {getFieldTypeLabel(field.type)}
+
+                  <div 
+                    className="cursor-pointer pr-6 relative"
+                    onClick={() => {
+                      setSelectedField(field);
+                      scrollToField(field);
+                    }}
+                  >
+                    {/* Show field type for text inputs and checkboxes */}
+                    {field.type === 'text_input' && (
+                      <div className="mb-1">
+                        <span className="text-xs px-2 py-0.5 rounded bg-green-100 text-green-700 font-medium">
+                          Text Input
                         </span>
-                        <span className="text-xs text-gray-500">Page {field.page}</span>
                       </div>
-                      <p className="text-xs text-gray-800 break-words">
-                        {field.text}
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+                    )}
+                    {field.type === 'checkbox' && (
+                      <div className="mb-1">
+                        <span className="text-xs px-2 py-0.5 rounded bg-orange-100 text-orange-700 font-medium">
+                          Checkbox
+                        </span>
+                      </div>
+                    )}
+                    <p className="text-xs text-gray-800 break-words py-2">
+                      {field.text}
+                    </p>
+                    <span className="text-gray-400 bg-white/80 px-1 py-0.5 rounded border border-gray-200" style={{ fontSize: '9px' }}>
+                      page {field.page}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
 
       {/* PDF Viewer */}
-      <div className="flex-1 min-h-screen relative">
+      <div className="ml-80 min-h-screen relative">
         <div className="relative w-full min-h-full flex-1">
           <PdfViewer 
             ref={pdfViewerRef}
@@ -620,6 +667,7 @@ const Parse: React.FC = () => {
                         pageDimensions={pageDimensions}
                         onClick={() => setSelectedField(field)}
                         isSelected={selectedField?.id === field.id}
+                        isHovered={hoveredField === field.id}
                         onPositionChange={handlePositionChange}
                         onClose={handleFieldClose}
                       />
