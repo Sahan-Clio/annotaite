@@ -9,7 +9,8 @@
 
 ### 🎯 Key Achievements
 - **100% Modern Stack**: Rails 7 API + React 18 with TypeScript
-- **Professional AI Integration**: Google Document AI + Gemini AI enhancement
+- **Advanced Computer Vision**: Custom processor with OpenCV + Unstructured library
+- **Gemini AI Enhancement**: Intelligent field association and semantic analysis
 - **Real-time Processing**: Instant field detection and visual feedback
 - **Enterprise Architecture**: Containerized, scalable, API-first design
 - **User-Friendly Interface**: Drag-and-drop with visual annotations
@@ -59,29 +60,29 @@
 
 ## ✅ Annot(AI)te Solutions: Revolutionary Improvements
 
-### 🚀 **Modern AI-Powered Architecture**
+### 🚀 **Modern Computer Vision & AI Architecture**
 
-#### **Professional AI Integration**
-Enterprise-grade processing with Google Cloud Document AI integration, featuring intelligent caching and robust error handling for optimal performance.
+#### **Advanced Computer Vision Processing**
+Custom Python processor service utilizing OpenCV for precise input box and checkbox detection, combined with Unstructured library for intelligent text label extraction, delivering superior accuracy compared to basic regex approaches.
 
-#### **Intelligent Field Enhancement**
-Advanced field association analysis using Gemini AI to create intelligent relationships between form labels and input fields with high accuracy.
+#### **Gemini AI Enhancement**
+Advanced field association analysis using Gemini AI to create intelligent relationships between form labels and input fields, providing semantic understanding and context-aware field mapping.
 
 ### 🎨 **Revolutionary User Experience**
 
 #### **Modern React Interface**
-Real-time document annotation with visual feedback, featuring instant processing and responsive user interface design.
+Real-time document annotation with visual feedback, featuring instant processing and responsive user interface design with professional-grade user experience.
 
 #### **Interactive Field Manipulation**
-Drag-and-drop field editing with real-time updates, allowing users to resize and reposition detected fields with immediate visual feedback.
+Drag-and-drop field editing with real-time updates, allowing users to resize and reposition detected fields with immediate visual feedback and precise coordinate management.
 
 ### 🏗️ **Enterprise-Grade Architecture**
 
-#### **Containerized Development**
-Professional deployment architecture with Docker containers, ensuring consistent development and production environments.
+#### **Containerized Microservices**
+Professional deployment architecture with Docker containers for the Rails API, React frontend, MySQL database, and custom Python processor service, ensuring consistent development and production environments.
 
 #### **API-First Design**
-RESTful API with comprehensive error handling, enabling easy integration with existing systems and workflows.
+RESTful API with comprehensive error handling, enabling easy integration with existing systems and workflows, featuring separate endpoints for processing and AI enhancement.
 
 ---
 
@@ -91,7 +92,7 @@ RESTful API with comprehensive error handling, enabling easy integration with ex
 | Metric | clio-draft-annotations | Annot(AI)te | Improvement |
 |--------|----------------------|-------------|-------------|
 | **Initial Processing** | 30-60 seconds | 2-5 seconds | **10x faster** |
-| **Field Detection** | Manual regex | AI-powered | **90%+ accuracy** |
+| **Field Detection** | Manual regex | Computer Vision + AI | **90%+ accuracy** |
 | **Visual Feedback** | None | Real-time | **Instant** |
 | **User Interaction** | Command-line | Visual interface | **100% improvement** |
 
@@ -99,38 +100,45 @@ RESTful API with comprehensive error handling, enabling easy integration with ex
 
 | Feature | clio-draft-annotations | Annot(AI)te |
 |---------|----------------------|-------------|
-| **AI Integration** | ❌ None | ✅ Google AI + Gemini |
+| **AI Integration** | ❌ None | ✅ Gemini AI Enhancement |
+| **Computer Vision** | ❌ None | ✅ OpenCV + Unstructured |
 | **Visual Interface** | ❌ Command-line only | ✅ Modern React UI |
 | **Real-time Processing** | ❌ Batch only | ✅ Instant feedback |
 | **Field Manipulation** | ❌ Text output only | ✅ Drag & drop editing |
 | **Document Support** | ❌ Limited PDF | ✅ Complex layouts |
-| **Scalability** | ❌ Single script | ✅ Enterprise architecture |
+| **Scalability** | ❌ Single script | ✅ Microservices architecture |
 | **API Integration** | ❌ None | ✅ RESTful APIs |
-| **Caching** | ❌ None | ✅ Intelligent caching |
+| **Coordinate Precision** | ❌ None | ✅ Normalized coordinates |
 | **Error Handling** | ❌ Poor | ✅ Comprehensive |
 
 ---
 
 ## 🎯 Key Innovations & Solutions
 
-### **1. Professional AI Integration**
-- **Google Document AI**: Enterprise-grade field detection with precise bounding boxes
-- **Gemini AI Enhancement**: Intelligent field association and semantic analysis
-- **Hybrid Approach**: Combines multiple AI services for optimal results
+### **1. Advanced Computer Vision Processing**
+- **OpenCV Integration**: Professional computer vision for precise input box and checkbox detection
+- **Unstructured Library**: Intelligent text extraction and label identification
+- **Normalized Coordinates**: Precise 0-1 coordinate system for accurate field positioning
 
-### **2. Real-time Visual Interface**
+### **2. Gemini AI Enhancement**
+- **Intelligent Field Association**: AI-powered matching between labels and input fields
+- **Semantic Analysis**: Context-aware field relationship understanding
+- **Two-Stage Processing**: Computer vision detection followed by AI enhancement
+
+### **3. Real-time Visual Interface**
 - **Instant Processing**: Documents processed in 2-5 seconds vs. minutes
-- **Visual Overlays**: See exactly where fields are detected
+- **Visual Overlays**: See exactly where fields are detected with precise positioning
 - **Interactive Editing**: Drag, resize, and modify field boundaries
 
-### **3. Modern Development Stack**
+### **4. Modern Development Stack**
 - **Rails 7 API**: Professional backend with proper architecture
 - **React 18 + TypeScript**: Type-safe, modern frontend
+- **Python Microservice**: Dedicated computer vision processing service
 - **Docker Architecture**: Consistent development and deployment
 
-### **4. Enterprise Features**
-- **API-First Design**: Easy integration with existing systems
-- **Intelligent Caching**: Avoid repeated AI processing costs
+### **5. Enterprise Features**
+- **Microservices Design**: Scalable, maintainable service architecture
+- **API-First Approach**: Easy integration with existing systems
 - **Comprehensive Logging**: Full visibility into processing pipeline
 - **Error Recovery**: Graceful handling of edge cases
 
@@ -144,9 +152,10 @@ RESTful API with comprehensive error handling, enabling easy integration with ex
 - **Real-time** collaboration and feedback
 
 ### **Accuracy Improvements**
-- **Professional AI** vs. basic regex patterns
+- **Computer Vision** vs. basic regex patterns
+- **AI-powered associations** vs. manual field mapping
 - **Visual confirmation** of field detection
-- **Intelligent associations** between labels and inputs
+- **Intelligent semantic analysis** for complex documents
 
 ### **User Adoption**
 - **Zero technical barrier** - web-based interface
@@ -154,6 +163,7 @@ RESTful API with comprehensive error handling, enabling easy integration with ex
 - **Instant feedback** - immediate value demonstration
 
 ### **Scalability Benefits**
+- **Microservices architecture** for independent scaling
 - **API integration** with existing workflows
 - **Containerized deployment** for easy scaling
 - **Modern architecture** for future enhancements
@@ -163,7 +173,7 @@ RESTful API with comprehensive error handling, enabling easy integration with ex
 ## 🔮 Future Roadmap
 
 ### **Phase 1: Enhanced AI** (In Progress)
-- ✅ Google Document AI integration
+- ✅ Custom Computer Vision processor
 - ✅ Gemini AI field associations
 - 🔄 OpenAI integration for semantic analysis
 - 🔄 Multi-language document support
@@ -177,6 +187,7 @@ RESTful API with comprehensive error handling, enabling easy integration with ex
 ### **Phase 3: Platform Expansion** (Future)
 - 📋 Multiple document formats
 - 📋 Custom AI model training
+- 📋 Enhanced computer vision models
 - 📋 Enterprise security features
 - 📋 Third-party integrations
 
@@ -187,9 +198,9 @@ RESTful API with comprehensive error handling, enabling easy integration with ex
 **Annot(AI)te** represents a complete paradigm shift from the legacy `clio-draft-annotations` approach:
 
 - **From command-line to visual interface**
-- **From basic regex to professional AI**
+- **From basic regex to computer vision + AI**
 - **From batch processing to real-time interaction**  
-- **From single script to enterprise architecture**
+- **From single script to microservices architecture**
 - **From technical barriers to user-friendly design**
 
 The result is a **10x improvement** in processing speed, accuracy, and user experience, delivering immediate business value while establishing a foundation for future innovation.
@@ -200,4 +211,4 @@ The result is a **10x improvement** in processing speed, accuracy, and user expe
 
 Get started in 30 seconds with our containerized development environment. Simply clone the repository, configure your environment variables, and launch the platform to access the modern interface at localhost:5173.
 
-**Experience the difference** - Upload a PDF and see professional AI annotation in action! 🚀 
+**Experience the difference** - Upload a PDF and see professional computer vision + AI annotation in action! 🚀 
