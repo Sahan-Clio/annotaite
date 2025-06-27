@@ -5,7 +5,7 @@ This project runs entirely in **Docker containers**. Never run commands directly
 
 ### Architecture
 - **Frontend**: React + TypeScript + Vite (port 5173)
-- **Backend**: Ruby on Rails API-only (port 3001)  
+- **Backend**: Ruby on Rails API-only (port 3002)
 - **Database**: MySQL 8.0 (port 3306)
 
 ## 🛠️ Dev Commands Usage
