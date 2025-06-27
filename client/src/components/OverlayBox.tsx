@@ -7,6 +7,7 @@ interface OverlayBoxProps {
   onClick?: () => void;
   isSelected?: boolean;
   onPositionChange?: (fieldId: string, newPosition: { x: number; y: number; width: number; height: number }) => void;
+  onClose?: (fieldId: string) => void;
 }
 
 const OverlayBox: React.FC<OverlayBoxProps> = ({ 
@@ -14,11 +15,13 @@ const OverlayBox: React.FC<OverlayBoxProps> = ({
   pageDimensions, 
   onClick, 
   isSelected = false,
-  onPositionChange 
+  onPositionChange,
+  onClose 
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
+  const [isHovered, setIsHovered] = useState(false);
   const [position, setPosition] = useState({
     x: field.bounding_box.x_min * 100,
     y: field.bounding_box.y_min * 100,
@@ -186,6 +189,12 @@ const OverlayBox: React.FC<OverlayBoxProps> = ({
     setLastMousePos({ x: e.clientX, y: e.clientY });
   }, [field.id]);
 
+  const handleCloseClick = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onClose?.(field.id);
+  }, [onClose, field.id]);
+
   // Add global mouse event listeners
   React.useEffect(() => {
     if (isDragging || isResizing) {
@@ -261,6 +270,8 @@ const OverlayBox: React.FC<OverlayBoxProps> = ({
       className={`${getFieldTypeStyle()} ${getSelectedStyle()}`}
       style={style}
       onMouseDown={handleMouseDown}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
       title={`${getFieldTypeLabel()}: ${field.text} (Page ${field.page}) - Size: ${rawWidth.toFixed(1)}% x ${rawHeight.toFixed(1)}%`}
     >
       {/* Field type indicator - show for selected fields or larger fields */}
@@ -321,6 +332,21 @@ const OverlayBox: React.FC<OverlayBoxProps> = ({
             {(position.x).toFixed(1)},{(position.y).toFixed(1)}
           </div>
         </div>
+      )}
+      
+      {/* Close button - show when selected or hovered */}
+      {(isSelected || isHovered) && onClose && (
+        <button
+          className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center text-xs font-bold border-2 border-white shadow-lg z-[1005] transition-colors"
+          onClick={handleCloseClick}
+          title="Hide this field"
+          style={{
+            fontSize: '10px',
+            lineHeight: '1',
+          }}
+        >
+          ×
+        </button>
       )}
     </div>
   );

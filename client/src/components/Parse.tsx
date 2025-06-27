@@ -12,6 +12,7 @@ const Parse: React.FC = () => {
   
   const [parseData, setParseData] = useState<ParseResponse | null>(null);
   const [selectedField, setSelectedField] = useState<Field | null>(null);
+  const [searchTerm, setSearchTerm] = useState<string>('');
   const [visibleFieldTypes, setVisibleFieldTypes] = useState<Set<FieldType>>(new Set([
     'form_field_label',
     'form_field_input',
@@ -27,6 +28,9 @@ const Parse: React.FC = () => {
   const [fieldPositions, setFieldPositions] = useState<Record<string, { x: number; y: number; width: number; height: number }>>({});
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const pdfViewerRef = useRef<HTMLDivElement>(null);
+  const [fieldTypesOpen, setFieldTypesOpen] = useState(true);
+  const [fieldsOpen, setFieldsOpen] = useState(true);
+  const [hiddenFields, setHiddenFields] = useState<Set<string>>(new Set());
 
   // Get the uploaded file from navigation state
   const uploadedFile = (location.state as any)?.file as File | undefined;
@@ -196,7 +200,23 @@ const Parse: React.FC = () => {
 
   const getVisibleFields = () => {
     if (!parseData) return [];
-    return parseData.fields.filter(field => visibleFieldTypes.has(field.type));
+    
+    let filteredFields = parseData.fields.filter(field => 
+      visibleFieldTypes.has(field.type) && !hiddenFields.has(field.id)
+    );
+    
+    // Apply search filter if search term exists
+    if (searchTerm.trim()) {
+      const searchLower = searchTerm.toLowerCase().trim();
+      filteredFields = filteredFields.filter(field => 
+        field.text.toLowerCase().includes(searchLower) ||
+        field.type.toLowerCase().includes(searchLower) ||
+        field.id.toLowerCase().includes(searchLower) ||
+        field.page.toString().includes(searchLower)
+      );
+    }
+    
+    return filteredFields;
   };
 
   const getFieldsByPage = (pageNumber: number) => {
@@ -220,6 +240,30 @@ const Parse: React.FC = () => {
     if (!parseData?.document_info.page_dimensions) return null;
     return parseData.document_info.page_dimensions.find(p => p.page === pageNumber);
   };
+
+  // Scroll to the selected field in the PDF viewer
+  const scrollToField = (field: Field) => {
+    if (!pdfViewerRef.current) return;
+    // Find the page container for the field's page
+    const pageContainer = pdfViewerRef.current.querySelector(`[data-page-number="${field.page}"]`);
+    if (pageContainer && 'scrollIntoView' in pageContainer) {
+      (pageContainer as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  };
+
+  // Handle field close/hide
+  const handleFieldClose = useCallback((fieldId: string) => {
+    setHiddenFields(prev => new Set([...prev, fieldId]));
+    // If the closed field was selected, clear selection
+    if (selectedField?.id === fieldId) {
+      setSelectedField(null);
+    }
+  }, [selectedField]);
+
+  // Collapse field types filter when a field is selected
+  useEffect(() => {
+    if (selectedField) setFieldTypesOpen(false);
+  }, [selectedField]);
 
   // Show loading state
   if (parseDocumentMutation.isPending) {
@@ -293,142 +337,201 @@ const Parse: React.FC = () => {
   const visibleFields = getVisibleFields();
 
   return (
-    <div className="flex h-screen bg-gray-100">
+    <div className="flex h-screen min-h-0 bg-gray-100">
       {/* Sidebar */}
-      <div className="w-80 bg-white shadow-lg border-r border-gray-200 flex flex-col">
-        {/* Header */}
-        <div className="p-4 border-b border-gray-200">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-lg font-semibold text-gray-800">Document Analysis</h2>
-            <div className="flex space-x-2">
-              <button
-                onClick={handleParse}
-                disabled={parseDocumentMutation.isPending}
-                className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50"
-              >
-                {parseDocumentMutation.isPending ? 'Parsing...' : 'Refresh'}
-              </button>
-                             <button
-                 onClick={() => navigate('/')}
-                 className="px-3 py-1 text-sm bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
-               >
-                 Back
-               </button>
-            </div>
-          </div>
-          <div className="text-sm text-gray-600">
-            <span className="font-medium">{uploadedFile?.name}</span>
-          </div>
-          <div className="text-sm text-gray-500">
-            Total: {parseData?.fields.length || 0} fields • {parseData?.document_info.total_pages || 0} pages
-          </div>
-        </div>
-
-        {/* Field Type Filters */}
-        <div className="p-4 border-b border-gray-200">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">Field Types</h3>
-          <div className="space-y-2">
-            {Object.keys(fieldTypeColors).map((fieldType) => {
-              const count = getFieldTypeCount(fieldType as FieldType);
-              const colors = fieldTypeColors[fieldType as FieldType];
-              const isVisible = visibleFieldTypes.has(fieldType as FieldType);
-              
-              return (
-                <label key={fieldType} className="flex items-center space-x-2 text-sm cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={isVisible}
-                    onChange={() => toggleFieldType(fieldType as FieldType)}
-                    className="rounded border-gray-300"
-                  />
-                  <span className={`px-2 py-1 rounded text-xs ${colors.bg} ${colors.text}`}>
-                    {getFieldTypeLabel(fieldType as FieldType)} ({count})
-                  </span>
-                </label>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Selected Field Info */}
-        {selectedField && (
-          <div className="p-4 border-b border-gray-200">
-            <h3 className="text-sm font-semibold text-gray-700 mb-2">Selected Field</h3>
-            <div className="space-y-2 text-sm">
-              <div>
-                <span className="font-medium text-gray-600">Type:</span>
-                <span className={`ml-2 px-2 py-1 rounded text-xs ${fieldTypeColors[selectedField.type]?.bg} ${fieldTypeColors[selectedField.type]?.text}`}>
-                  {getFieldTypeLabel(selectedField.type)}
-                </span>
-              </div>
-              <div>
-                <span className="font-medium text-gray-600">Text:</span>
-                <p className="mt-1 text-gray-800 break-words">{selectedField.text}</p>
-              </div>
-              <div>
-                <span className="font-medium text-gray-600">Page:</span>
-                <span className="ml-2 text-gray-800">{selectedField.page}</span>
-              </div>
-              <div>
-                <span className="font-medium text-gray-600">Position:</span>
-                <span className="ml-2 text-gray-500 text-xs">
-                  ({selectedField.bounding_box.x_min.toFixed(3)}, {selectedField.bounding_box.y_min.toFixed(3)})
-                </span>
-              </div>
-              <div>
-                <span className="font-medium text-gray-600">ID:</span>
-                <span className="ml-2 text-gray-500 font-mono text-xs">{selectedField.id}</span>
-              </div>
-              {selectedField.form_field_info && (
-                <div>
-                  <span className="font-medium text-gray-600">Input Type:</span>
-                  <span className="ml-2 text-gray-800">{selectedField.form_field_info.field_type}</span>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Field List */}
-        <div className="flex-1 overflow-y-auto p-4">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">Fields ({visibleFields.length})</h3>
-          <div className="space-y-2">
-            {visibleFields.map((field) => {
-              const colors = fieldTypeColors[field.type];
-              const isSelected = selectedField?.id === field.id;
-              
-              return (
-                <div
-                  key={field.id}
-                  className={`p-3 rounded border cursor-pointer transition-all ${
-                    isSelected 
-                      ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200' 
-                      : `${colors.border} ${colors.bg} hover:shadow-md`
-                  }`}
-                  onClick={() => setSelectedField(field)}
+      <div className="w-80 bg-white shadow-lg border-r border-gray-200 flex flex-col min-h-0 h-screen">
+        {/* Top (non-scrolling) */}
+        <div className="shrink-0">
+          {/* Header (more compact) */}
+          <div className="p-2 border-b border-gray-200">
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="text-base font-semibold text-gray-800">Document Analysis</h2>
+              <div className="flex space-x-1">
+                <button
+                  onClick={handleParse}
+                  disabled={parseDocumentMutation.isPending}
+                  className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50"
                 >
-                  <div className="flex items-start justify-between mb-1">
-                    <span className={`text-xs px-2 py-1 rounded ${colors.bg} ${colors.text} font-medium`}>
-                      {getFieldTypeLabel(field.type)}
-                    </span>
-                    <span className="text-xs text-gray-500">Page {field.page}</span>
-                  </div>
-                  <p className="text-sm text-gray-800 break-words line-clamp-2">
-                    {field.text}
-                  </p>
-                  <div className="text-xs text-gray-500 mt-1 font-mono">
-                    {field.id}
-                  </div>
-                </div>
-              );
-            })}
+                  {parseDocumentMutation.isPending ? 'Parsing...' : 'Refresh'}
+                </button>
+                <button
+                  onClick={() => navigate('/')} 
+                  className="px-2 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
+                >
+                  Back
+                </button>
+              </div>
+            </div>
+            <div className="text-xs text-gray-600">
+              <span className="font-medium">{uploadedFile?.name}</span>
+            </div>
+            <div className="text-xs text-gray-500">
+              Total: {parseData?.fields.length || 0} fields • {parseData?.document_info.total_pages || 0} pages
+            </div>
           </div>
+
+          {/* Field Type Filters (collapsible) */}
+          <div className="border-b border-gray-200">
+            <button
+              className="w-full flex items-center justify-between px-4 py-2 text-xs font-semibold text-gray-700 bg-gray-50 hover:bg-gray-100 focus:outline-none"
+              onClick={() => setFieldTypesOpen((open) => !open)}
+              aria-expanded={fieldTypesOpen}
+            >
+              <span>Field Types</span>
+              <svg className={`w-4 h-4 ml-2 transition-transform ${fieldTypesOpen ? '' : 'rotate-180'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {fieldTypesOpen && (
+              <div className="px-4 pb-2 space-y-1">
+                {Object.keys(fieldTypeColors).map((fieldType) => {
+                  const count = getFieldTypeCount(fieldType as FieldType);
+                  const colors = fieldTypeColors[fieldType as FieldType];
+                  const isVisible = visibleFieldTypes.has(fieldType as FieldType);
+                  return (
+                    <label key={fieldType} className="flex items-center space-x-2 text-xs cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={isVisible}
+                        onChange={() => toggleFieldType(fieldType as FieldType)}
+                        className="rounded border-gray-300"
+                      />
+                      <span className={`px-2 py-1 rounded text-xs ${colors.bg} ${colors.text}`}>
+                        {getFieldTypeLabel(fieldType as FieldType)} ({count})
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Selected Field Info (more compact) */}
+          {selectedField && (
+            <div className="p-2 border-b border-gray-200">
+              <h3 className="text-xs font-semibold text-gray-700 mb-1">Selected Field</h3>
+              <div className="space-y-1 text-xs">
+                <div>
+                  <span className="font-medium text-gray-600">Type:</span>
+                  <span className={`ml-2 px-2 py-1 rounded text-xs ${fieldTypeColors[selectedField.type]?.bg} ${fieldTypeColors[selectedField.type]?.text}`}>
+                    {getFieldTypeLabel(selectedField.type)}
+                  </span>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-600">Text:</span>
+                  <p className="mt-1 text-gray-800 break-words">{selectedField.text}</p>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-600">Page:</span>
+                  <span className="ml-2 text-gray-800">{selectedField.page}</span>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-600">Position:</span>
+                  <span className="ml-2 text-gray-500 text-xs">
+                    ({selectedField.bounding_box.x_min.toFixed(3)}, {selectedField.bounding_box.y_min.toFixed(3)})
+                  </span>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-600">ID:</span>
+                  <span className="ml-2 text-gray-500 font-mono text-xs">{selectedField.id}</span>
+                </div>
+                {selectedField.form_field_info && (
+                  <div>
+                    <span className="font-medium text-gray-600">Input Type:</span>
+                    <span className="ml-2 text-gray-800">{selectedField.form_field_info.field_type}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+        {/* Field List (scrollable, simple list) */}
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          {/* Fields section header (collapsible) */}
+          <div className="border-b border-gray-200">
+            <button
+              className="w-full flex items-center justify-between px-2 py-2 text-sm font-semibold text-gray-700 bg-gray-50 hover:bg-gray-100 focus:outline-none"
+              onClick={() => setFieldsOpen((open) => !open)}
+              aria-expanded={fieldsOpen}
+            >
+              <span>Fields ({visibleFields.length})</span>
+              <div className="flex items-center space-x-2">
+                {searchTerm && fieldsOpen && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSearchTerm('');
+                    }}
+                    className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded"
+                    title="Clear search"
+                  >
+                    Clear
+                  </button>
+                )}
+                <svg className={`w-4 h-4 transition-transform ${fieldsOpen ? '' : 'rotate-180'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+            </button>
+          </div>
+          
+          {fieldsOpen && (
+            <div className="p-2">
+              {/* Search input */}
+              <div className="mb-3 relative">
+                <input
+                  type="text"
+                  placeholder="Search fields..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full px-3 py-2 pr-8 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </div>
+              </div>
+              
+              <div className="space-y-1">
+                {visibleFields.map((field) => {
+                  const colors = fieldTypeColors[field.type];
+                  const isSelected = selectedField?.id === field.id;
+                  
+                  return (
+                    <div
+                      key={field.id}
+                      className={`p-2 rounded border cursor-pointer transition-all hover:shadow-sm ${
+                        isSelected 
+                          ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200' 
+                          : `${colors.border} ${colors.bg} hover:shadow-md`
+                      }`}
+                      onClick={() => {
+                        setSelectedField(field);
+                        scrollToField(field);
+                      }}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className={`text-xs px-2 py-1 rounded ${colors.bg} ${colors.text} font-medium`}>
+                          {getFieldTypeLabel(field.type)}
+                        </span>
+                        <span className="text-xs text-gray-500">Page {field.page}</span>
+                      </div>
+                      <p className="text-xs text-gray-800 break-words">
+                        {field.text}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
       {/* PDF Viewer */}
-      <div className="flex-1 relative">
-        <div className="relative w-full h-full">
+      <div className="flex-1 min-h-0 h-screen relative">
+        <div className="relative w-full h-full flex-1 min-h-0">
           <PdfViewer 
             ref={pdfViewerRef}
             fileUrl={pdfUrl} 
@@ -530,6 +633,7 @@ const Parse: React.FC = () => {
                         onClick={() => setSelectedField(field)}
                         isSelected={selectedField?.id === field.id}
                         onPositionChange={handlePositionChange}
+                        onClose={handleFieldClose}
                       />
                     </div>
                   ))}
