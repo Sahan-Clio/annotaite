@@ -56,7 +56,7 @@ export const PdfViewer = forwardRef<HTMLDivElement, PdfViewerProps>(
     }, [])
 
     return (
-      <div ref={ref} className="w-full h-full overflow-auto bg-gray-100">
+      <div ref={ref} className="w-full min-h-full overflow-auto bg-gray-100">
         <div className="flex flex-col items-center py-4 min-h-full">
           <Document
             file={fileUrl}

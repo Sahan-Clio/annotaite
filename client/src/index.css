@@ -25,6 +25,11 @@
     --primary-foreground: 0 0% 0%;
   }
 
+  html, body, #root {
+    height: auto;
+    min-height: 100vh;
+  }
+
   * {
     @apply border-border;
   }

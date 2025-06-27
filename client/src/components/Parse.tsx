@@ -325,9 +325,9 @@ const Parse: React.FC = () => {
   const visibleFields = getVisibleFields();
 
   return (
-    <div className="flex h-screen min-h-0 bg-gray-100">
+    <div className="flex min-h-screen bg-gray-100">
       {/* Sidebar */}
-      <div className="w-80 bg-white shadow-lg border-r border-gray-200 flex flex-col min-h-0 h-screen">
+      <div className="w-80 bg-white shadow-lg border-r border-gray-200 flex flex-col min-h-screen">
         {/* Top (non-scrolling) */}
         <div className="shrink-0">
           {/* Header (more compact) */}
@@ -518,8 +518,8 @@ const Parse: React.FC = () => {
       </div>
 
       {/* PDF Viewer */}
-      <div className="flex-1 min-h-0 h-screen relative">
-        <div className="relative w-full h-full flex-1 min-h-0">
+      <div className="flex-1 min-h-screen relative">
+        <div className="relative w-full min-h-full flex-1">
           <PdfViewer 
             ref={pdfViewerRef}
             fileUrl={pdfUrl} 

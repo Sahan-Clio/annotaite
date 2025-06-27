@@ -92,7 +92,7 @@ export function Home() {
       <div className="relative z-10 min-h-screen flex items-center justify-center p-6">
         <div className="text-center max-w-4xl mx-auto">
           {/* Header Section */}
-          <div className="mb-12">
+          <div className="mb-10">
             <div className="mb-6">
               <h1 className="text-6xl md:text-7xl font-mono font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-blue-800 bg-clip-text text-transparent mb-4 tracking-tight">
                 annot[ai]tor
@@ -104,46 +104,13 @@ export function Home() {
             </p>
           </div>
 
-          {/* Feature highlights */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-            <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
-              <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mx-auto mb-4">
-                <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-              </div>
-              <h3 className="font-semibold text-gray-800 mb-2">Smart Document Analysis</h3>
-              <p className="text-sm text-gray-600">AI-powered field detection and classification</p>
-            </div>
-            
-            <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
-              <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center mx-auto mb-4">
-                <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                </svg>
-              </div>
-              <h3 className="font-semibold text-gray-800 mb-2">Interactive Annotations</h3>
-              <p className="text-sm text-gray-600">Click, drag, and edit field overlays in real-time</p>
-            </div>
-            
-            <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
-              <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center mx-auto mb-4">
-                <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </div>
-              <h3 className="font-semibold text-gray-800 mb-2">Advanced Search</h3>
-              <p className="text-sm text-gray-600">Quickly find and filter through document fields</p>
-            </div>
-          </div>
-
           {/* Upload Section */}
-          <div className="max-w-2xl mx-auto">
-            <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-8 shadow-2xl border border-white/30">
-              <div className="space-y-6">
+          <div className="max-w-xl mx-auto mb-10">
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-white/30">
+              <div className="space-y-4">
                 {/* Drag and Drop Area */}
                 <div 
-                  className={`relative border-3 border-dashed rounded-2xl p-12 transition-all duration-300 ${
+                  className={`relative border-2 border-dashed rounded-xl p-8 transition-all duration-300 ${
                     isDragOver 
                       ? 'border-blue-500 bg-blue-50/50 scale-105' 
                       : selectedFile 
@@ -163,15 +130,15 @@ export function Home() {
                   />
                   
                   <div className="text-center">
-                    <div className={`w-20 h-20 mx-auto mb-6 rounded-2xl flex items-center justify-center transition-all duration-300 ${
+                    <div className={`w-16 h-16 mx-auto mb-4 rounded-xl flex items-center justify-center transition-all duration-300 ${
                       selectedFile ? 'bg-green-100' : 'bg-gray-100'
                     }`}>
                       {selectedFile ? (
-                        <svg className="w-10 h-10 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                       ) : (
-                        <svg className="w-10 h-10 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                         </svg>
                       )}
@@ -202,7 +169,7 @@ export function Home() {
                 <button
                   onClick={handleUpload}
                   disabled={!selectedFile}
-                  className={`w-full py-4 px-8 rounded-2xl font-semibold text-lg transition-all duration-300 transform ${
+                  className={`w-full py-3 px-6 rounded-xl font-medium text-base transition-all duration-300 transform ${
                     selectedFile
                       ? 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg hover:shadow-xl hover:-translate-y-1 hover:scale-105'
                       : 'bg-gray-200 text-gray-400 cursor-not-allowed'
@@ -230,10 +197,45 @@ export function Home() {
             </div>
           </div>
 
+          {/* Feature highlights - moved below upload */}
+          <div className="max-w-3xl mx-auto mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-white/50 backdrop-blur-sm rounded-lg p-4 shadow-md border border-white/20 hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
+                <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-2">
+                  <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+                <h3 className="font-medium text-gray-800 text-sm mb-1 text-center">Smart Analysis</h3>
+                <p className="text-xs text-gray-600 text-center">AI-powered field detection</p>
+              </div>
+              
+              <div className="bg-white/50 backdrop-blur-sm rounded-lg p-4 shadow-md border border-white/20 hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
+                <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center mx-auto mb-2">
+                  <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
+                </div>
+                <h3 className="font-medium text-gray-800 text-sm mb-1 text-center">Interactive</h3>
+                <p className="text-xs text-gray-600 text-center">Drag and edit overlays</p>
+              </div>
+              
+              <div className="bg-white/50 backdrop-blur-sm rounded-lg p-4 shadow-md border border-white/20 hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
+                <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center mx-auto mb-2">
+                  <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </div>
+                <h3 className="font-medium text-gray-800 text-sm mb-1 text-center">Search</h3>
+                <p className="text-xs text-gray-600 text-center">Find and filter fields</p>
+              </div>
+            </div>
+          </div>
+
           {/* Footer */}
-          <div className="mt-12 text-center">
+          <div className="mt-8 text-center">
             <p className="text-sm text-gray-400">
-              Built with React & Rails
+              Built with React, Rails & Python
             </p>
           </div>
         </div>

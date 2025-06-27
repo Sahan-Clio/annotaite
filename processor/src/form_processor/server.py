@@ -15,7 +15,7 @@ from typing import List, Dict, Tuple, Any
 from .main import process_form_fields
 
 # Configuration constants for filtering
-MIN_LABEL_LENGTH = 5  # Minimum character length for labels to be included
+MIN_LABEL_LENGTH = 2  # Minimum character length for labels to be included
 
 # Self-contained form field detection functions
 def split_pdf_into_pages(pdf_path: Path, temp_dir: Path):
