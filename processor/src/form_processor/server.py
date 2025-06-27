@@ -113,7 +113,7 @@ def remove_text_elements_from_image(image, text_elements):
 
 
 def detect_input_boxes_and_checkboxes(cleaned_image):
-    """Detect input boxes and checkboxes using contour-based methods only."""
+    """Detect input boxes and checkboxes with improved support for multi-boxes and longer fields."""
     import cv2
     import numpy as np
     
@@ -125,44 +125,177 @@ def detect_input_boxes_and_checkboxes(cleaned_image):
     all_input_boxes = []
     all_checkboxes = []
     
-    # Method 1: Contour detection with multiple thresholds (blue elements)
+    # Get image dimensions for dynamic sizing
+    img_height, img_width = gray.shape[:2]
+    
+    # Method 1: Enhanced contour detection for various field types
     for thresh_val in [240, 220, 200, 180, 160]:
         _, binary = cv2.threshold(gray, thresh_val, 255, cv2.THRESH_BINARY_INV)
-        contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
-        for contour in contours:
-            x, y, w, h = cv2.boundingRect(contour)
-            area = w * h
+        # Try multiple processing approaches
+        processed_images = []
+        
+        # Original binary
+        processed_images.append(('original', binary))
+        
+        # Light morphological processing for edge enhancement
+        kernel_small = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
+        light_processed = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel_small, iterations=1)
+        processed_images.append(('light_morph', light_processed))
+        
+        # Horizontal line detection for long input fields
+        kernel_horizontal = cv2.getStructuringElement(cv2.MORPH_RECT, (15, 1))
+        horizontal_lines = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel_horizontal, iterations=2)
+        processed_images.append(('horizontal_lines', horizontal_lines))
+        
+        # Vertical line detection for tall/multi-line fields
+        kernel_vertical = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 10))
+        vertical_lines = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel_vertical, iterations=2)
+        processed_images.append(('vertical_lines', vertical_lines))
+        
+        for method_name, processed_img in processed_images:
+            # Find contours on the processed image
+            contours, _ = cv2.findContours(processed_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             
-            # More relaxed size constraints
-            if area < 25 or area > 50000:
-                continue
-            
-            aspect_ratio = w / h if h > 0 else 0
-            
-            # More relaxed aspect ratio constraints
-            if 0.6 <= aspect_ratio <= 1.4 and 8 <= w <= 100 and 8 <= h <= 100:
-                # Checkbox
-                all_checkboxes.append({
-                    'type': 'checkbox',
-                    'x': x, 'y': y, 'width': w, 'height': h,
-                    'area': area, 'aspect_ratio': aspect_ratio,
-                    'method': f'contour_t{thresh_val}'
-                })
-            elif 1.2 <= aspect_ratio <= 20.0 and 25 <= w <= 800 and 6 <= h <= 80:
-                # Input box (much more relaxed)
-                all_input_boxes.append({
-                    'type': 'input_box',
-                    'x': x, 'y': y, 'width': w, 'height': h,
-                    'area': area, 'aspect_ratio': aspect_ratio,
-                    'method': f'contour_t{thresh_val}'
-                })
+            for contour in contours:
+                # Use simple bounding rectangle for better compatibility
+                x, y, w, h = cv2.boundingRect(contour)
+                area = w * h
+                
+                # Dynamic size constraints based on image size
+                min_area = max(25, (img_width * img_height) // 50000)  # Adaptive minimum
+                max_area = min(200000, (img_width * img_height) // 4)   # Adaptive maximum
+                
+                if area < min_area or area > max_area:
+                    continue
+                
+                aspect_ratio = w / h if h > 0 else 0
+                
+                # Calculate contour area to bounding box area ratio (very lenient)
+                contour_area = cv2.contourArea(contour)
+                bbox_area = w * h
+                fill_ratio = contour_area / bbox_area if bbox_area > 0 else 0
+                
+                # More dynamic size limits based on image dimensions
+                max_width = min(2000, img_width * 0.85)   # Up to 80% of image width
+                max_height = min(200, img_height * 0.35)  # Up to 30% of image height
+                
+                # Enhanced detection logic for different field types
+                if method_name == 'horizontal_lines':
+                    # Special handling for long horizontal input fields
+                    if 3.0 <= aspect_ratio <= 100.0 and 50 <= w <= max_width and 3 <= h <= 50 and fill_ratio > 0.02:
+                        all_input_boxes.append({
+                            'type': 'input_box',
+                            'x': x, 'y': y, 'width': w, 'height': h,
+                            'area': area, 'aspect_ratio': aspect_ratio,
+                            'fill_ratio': fill_ratio,
+                            'method': f'horizontal_line_t{thresh_val}'
+                        })
+                elif method_name == 'vertical_lines':
+                    # Special handling for tall/multi-line fields
+                    if 0.1 <= aspect_ratio <= 3.0 and 10 <= w <= 200 and 20 <= h <= max_height and fill_ratio > 0.02:
+                        all_input_boxes.append({
+                            'type': 'input_box',
+                            'x': x, 'y': y, 'width': w, 'height': h,
+                            'area': area, 'aspect_ratio': aspect_ratio,
+                            'fill_ratio': fill_ratio,
+                            'method': f'vertical_line_t{thresh_val}'
+                        })
+                else:
+                    # Standard detection for regular fields
+                    # Checkbox detection (square-ish, smaller)
+                    if 0.5 <= aspect_ratio <= 2.0 and 8 <= w <= 120 and 8 <= h <= 120 and fill_ratio > 0.02:
+                        all_checkboxes.append({
+                            'type': 'checkbox',
+                            'x': x, 'y': y, 'width': w, 'height': h,
+                            'area': area, 'aspect_ratio': aspect_ratio,
+                            'fill_ratio': fill_ratio,
+                            'method': f'contour_t{thresh_val}_{method_name}'
+                        })
+                    # Input box detection (much more permissive)
+                    elif 0.8 <= aspect_ratio <= 50.0 and 15 <= w <= max_width and 4 <= h <= max_height and fill_ratio > 0.02:
+                        all_input_boxes.append({
+                            'type': 'input_box',
+                            'x': x, 'y': y, 'width': w, 'height': h,
+                            'area': area, 'aspect_ratio': aspect_ratio,
+                            'fill_ratio': fill_ratio,
+                            'method': f'contour_t{thresh_val}_{method_name}'
+                        })
     
-    # Remove duplicates based on overlap
-    unique_input_boxes = remove_overlapping_boxes(all_input_boxes)
+    # Group nearby boxes that might be multi-part fields
+    grouped_input_boxes = group_nearby_boxes(all_input_boxes, img_width, img_height)
+    
+    # Remove duplicates based on overlap (more lenient for grouped boxes)
+    unique_input_boxes = remove_overlapping_boxes(grouped_input_boxes)
     unique_checkboxes = remove_overlapping_boxes(all_checkboxes)
     
     return unique_input_boxes, unique_checkboxes
+
+
+def group_nearby_boxes(boxes, img_width, img_height):
+    """Group nearby boxes that might be multi-part fields (like date fields with separate day/month/year boxes)."""
+    if not boxes:
+        return []
+    
+    # Calculate proximity thresholds based on image size
+    horizontal_threshold = img_width * 0.02  # 2% of image width
+    vertical_threshold = img_height * 0.01   # 1% of image height
+    
+    grouped_boxes = []
+    used_indices = set()
+    
+    for i, box1 in enumerate(boxes):
+        if i in used_indices:
+            continue
+            
+        # Find nearby boxes that could be part of a multi-box field
+        group = [box1]
+        used_indices.add(i)
+        
+        for j, box2 in enumerate(boxes):
+            if j in used_indices or i == j:
+                continue
+                
+            # Check if boxes are horizontally aligned and close together
+            vertical_distance = abs(box1['y'] - box2['y'])
+            horizontal_distance = abs((box1['x'] + box1['width']) - box2['x'])
+            
+            # Similar heights and horizontally close = likely multi-part field
+            height_diff = abs(box1['height'] - box2['height'])
+            height_similarity = height_diff / max(box1['height'], box2['height']) if max(box1['height'], box2['height']) > 0 else 1
+            
+            if (vertical_distance <= vertical_threshold and 
+                horizontal_distance <= horizontal_threshold and 
+                height_similarity <= 0.3):  # Heights should be similar
+                group.append(box2)
+                used_indices.add(j)
+        
+        # If we found a group of boxes, create a combined bounding box
+        if len(group) > 1:
+            # Create a combined bounding box that encompasses all grouped boxes
+            min_x = min(box['x'] for box in group)
+            min_y = min(box['y'] for box in group)
+            max_x = max(box['x'] + box['width'] for box in group)
+            max_y = max(box['y'] + box['height'] for box in group)
+            
+            combined_box = {
+                'type': 'input_box',
+                'x': min_x,
+                'y': min_y,
+                'width': max_x - min_x,
+                'height': max_y - min_y,
+                'area': (max_x - min_x) * (max_y - min_y),
+                'aspect_ratio': (max_x - min_x) / (max_y - min_y) if (max_y - min_y) > 0 else 0,
+                'fill_ratio': sum(box['area'] for box in group) / ((max_x - min_x) * (max_y - min_y)),
+                'method': f'grouped_{len(group)}_boxes',
+                'sub_boxes': group  # Keep track of individual boxes
+            }
+            grouped_boxes.append(combined_box)
+        else:
+            # Single box, add as-is
+            grouped_boxes.append(box1)
+    
+    return grouped_boxes
 
 
 def remove_overlapping_boxes(boxes):
