@@ -23,6 +23,7 @@ const OverlayBox: React.FC<OverlayBoxProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
+  const [showTooltip, setShowTooltip] = useState(false);
   const [position, setPosition] = useState({
     x: field.bounding_box.x_min * 100,
     y: field.bounding_box.y_min * 100,
@@ -283,7 +284,9 @@ const OverlayBox: React.FC<OverlayBoxProps> = ({
       className={`${getFieldTypeStyle()} ${getSelectedStyle()}`}
       style={style}
       onMouseDown={handleMouseDown}
-      title={`${getFieldTypeLabel()}: ${field.text} (Page ${field.page}) - Size: ${rawWidth.toFixed(1)}% x ${rawHeight.toFixed(1)}%`}
+      onMouseEnter={() => field.type === 'checkbox' && setShowTooltip(true)}
+      onMouseLeave={() => field.type === 'checkbox' && setShowTooltip(false)}
+      title={field.type !== 'checkbox' ? `${getFieldTypeLabel()}: ${field.text} (Page ${field.page}) - Size: ${rawWidth.toFixed(1)}% x ${rawHeight.toFixed(1)}%` : undefined}
     >
       {/* Field type indicator - show for selected fields or larger fields */}
       {(isSelected || expandedWidth > 15) && (
@@ -356,6 +359,15 @@ const OverlayBox: React.FC<OverlayBoxProps> = ({
         </div>
       )}
       
+      {/* Checkbox hover tooltip */}
+      {field.type === 'checkbox' && showTooltip && field.text && (
+        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 z-[1005] pointer-events-none">
+          <div className="bg-black text-white text-xs px-2 py-1 rounded whitespace-nowrap max-w-xs">
+            {field.text}
+            <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-black"></div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

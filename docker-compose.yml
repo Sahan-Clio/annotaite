@@ -28,6 +28,7 @@ services:
       - ~/.config/gcloud/application_default_credentials.json:/root/.config/gcloud/application_default_credentials.json:ro
     environment:
       - GOOGLE_APPLICATION_CREDENTIALS=/root/.config/gcloud/application_default_credentials.json
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
     ports: [ "3001:3001" ]
     depends_on:
       db:

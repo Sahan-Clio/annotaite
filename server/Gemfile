@@ -22,7 +22,8 @@ gem "dotenv-rails"
 # HTTP client for processor service
 gem "httparty"
 
-
+# AI Services
+gem "gemini-ai", "~> 4.2.0"
 
 group :development, :test do
   gem "debug", platforms: %i[ mri windows ]

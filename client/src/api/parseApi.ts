@@ -21,11 +21,38 @@ export const parseDocument = async (file: File): Promise<ParseResponse> => {
   }
 };
 
+export const analyzeWithAI = async (payload: ParseResponse): Promise<any> => {
+  try {
+    const response = await api.post('/ai-analyze', {
+      payload: payload
+    }, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    return response.data;
+  } catch (error: any) {
+    if (error.response?.data?.error) {
+      throw new Error(error.response.data.error);
+    }
+    throw new Error('Failed to analyze with AI');
+  }
+};
+
 export const useParseDocument = () => {
   return useMutation({
     mutationFn: parseDocument,
     onError: (error) => {
       console.error('Parse document error:', error);
+    }
+  });
+};
+
+export const useAnalyzeWithAI = () => {
+  return useMutation({
+    mutationFn: analyzeWithAI,
+    onError: (error) => {
+      console.error('AI analyze error:', error);
     }
   });
 }; 

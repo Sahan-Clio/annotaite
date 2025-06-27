@@ -14,9 +14,48 @@ export interface FormField {
 export interface ParseResponse {
   success: boolean;
   fields: Field[];
+  field_associations: FieldAssociation[];
   total_fields: number;
   document_info: DocumentInfo;
   error?: string;
+  // Enhanced Gemini AI response fields
+  field_groups?: FieldGroup[];
+  processing_info?: ProcessingInfo;
+}
+
+export interface FieldAssociation {
+  id: string;
+  label: {
+    id: string;
+    text: string;
+    bounding_box: BoundingBox;
+  };
+  input: {
+    id: string;
+    type: 'text_input' | 'checkbox';
+    bounding_box: BoundingBox;
+    text?: string;
+  };
+  page: number;
+}
+
+export interface FieldGroup {
+  group_name: string;
+  fields: string[];
+  group_type: GroupType;
+}
+
+export interface ProcessingInfo {
+  enhanced_by?: string;
+  enhanced_at?: string;
+  model?: string;
+  gemini_enhancement_attempted?: boolean;
+  gemini_enhancement_failed?: boolean;
+  gemini_error?: string;
+  fallback_to?: string;
+  original_field_count?: number;
+  filtered_field_count?: number;
+  associations_count?: number;
 }
 
 export interface DocumentInfo {
@@ -37,12 +76,32 @@ export interface Field {
   page: number;
   bounding_box: BoundingBox;
   form_field_info?: FormFieldInfo;
+  // Enhanced Gemini AI fields
+  paired_with?: string;
+  field_purpose?: FieldPurpose;
+  confidence?: number;
 }
 
 export type FieldType = 
   | 'label'
   | 'text_input'
   | 'checkbox';
+
+export type FieldPurpose = 
+  | 'name'
+  | 'email'
+  | 'address'
+  | 'phone'
+  | 'date'
+  | 'checkbox_option'
+  | 'other';
+
+export type GroupType = 
+  | 'personal_info'
+  | 'address'
+  | 'contact'
+  | 'agreement'
+  | 'other';
 
 export interface FormFieldInfo {
   field_type?: 'text' | 'checkbox';
